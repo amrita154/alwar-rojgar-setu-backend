@@ -93,6 +93,14 @@ cp .env.example .env
 | PATCH | /api/v1/admin/users/:id/disable | Admin | Disable user |
 | PATCH | /api/v1/admin/users/:id/enable | Admin | Enable user |
 | GET | /api/v1/stats | Public | Homepage stats |
+| GET | /api/v1/documents/:filename | JWT | Serve uploaded file (auth-gated) |
+
+## Security
+
+- **File access** — uploaded files are not publicly accessible. Fetch via `GET /api/v1/documents/:filename` with a valid Bearer token. Access is checked against ownership and application relationships.
+- **OTP rate limiting** — 3 requests/phone and 10 requests/IP per 10-minute window.
+- **Global rate limit** — 200 requests/IP per 15 minutes across all endpoints.
+- **Security headers** — `helmet` applied on all responses.
 
 ## Development
 

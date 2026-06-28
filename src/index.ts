@@ -1,9 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import path from 'path';
+import helmet from 'helmet';
 import { config } from './config';
 import { errorHandler, notFound } from './middleware/errorHandler';
+import { globalLimiter } from './middleware/rateLimiter';
 
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
@@ -13,19 +14,18 @@ import jobRoutes from './routes/jobs';
 import applicationRoutes from './routes/applications';
 import adminRoutes from './routes/admin';
 import statsRoutes from './routes/stats';
+import documentRoutes from './routes/documents';
 
 const app = express();
 
-// Core middleware
+app.use(helmet());
+app.use(globalLimiter);
 app.use(cors({
   origin: config.cors.origin,
   credentials: true,
 }));
 app.use(express.json());
 app.use(cookieParser());
-
-// Serve uploaded files
-app.use('/uploads', express.static(path.resolve(config.upload.dir)));
 
 // Health check
 app.get('/api/v1/health', (_req, res) => {
@@ -41,6 +41,7 @@ app.use('/api/v1/jobs', jobRoutes);
 app.use('/api/v1/job-applications', applicationRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/stats', statsRoutes);
+app.use('/api/v1/documents', documentRoutes);
 
 // Error handling
 app.use(notFound);

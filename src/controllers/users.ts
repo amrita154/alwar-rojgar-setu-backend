@@ -9,20 +9,13 @@ export async function getCurrentUser(req: AuthRequest, res: Response): Promise<v
   }
 
   const { userId, role } = req.user;
-
   let profileCompleted = false;
 
   if (role === 'candidate') {
-    const result = await pool.query(
-      'SELECT id FROM candidate_profiles WHERE user_id = $1',
-      [userId]
-    );
+    const result = await pool.query('SELECT id FROM candidate_profiles WHERE user_id = $1', [userId]);
     profileCompleted = result.rows.length > 0;
   } else if (role === 'employer') {
-    const result = await pool.query(
-      'SELECT id FROM employer_profiles WHERE user_id = $1',
-      [userId]
-    );
+    const result = await pool.query('SELECT id FROM employer_profiles WHERE user_id = $1', [userId]);
     profileCompleted = result.rows.length > 0;
   } else if (role === 'admin') {
     profileCompleted = true;

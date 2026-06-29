@@ -129,6 +129,14 @@ export async function close(jobId: string, employerId: string) {
   return result.rows.length > 0 ? toCamelCase(result.rows[0]) : null;
 }
 
+export async function reopen(jobId: string, employerId: string) {
+  const result = await pool.query(
+    `UPDATE jobs SET status = 'active', posted_at = NOW() WHERE id = $1 AND employer_id = $2 RETURNING *`,
+    [jobId, employerId]
+  );
+  return result.rows.length > 0 ? toCamelCase(result.rows[0]) : null;
+}
+
 export async function isOwnedBy(jobId: string, employerId: string): Promise<boolean> {
   const result = await pool.query(
     'SELECT id FROM jobs WHERE id = $1 AND employer_id = $2',

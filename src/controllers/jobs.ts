@@ -103,6 +103,25 @@ export async function closeJob(req: AuthRequest, res: Response): Promise<void> {
   res.json(closed);
 }
 
+export async function reopenJob(req: AuthRequest, res: Response): Promise<void> {
+  const userId = req.user!.userId;
+  const { jobId } = req.params;
+
+  const employerId = await employerService.getProfileId(userId);
+  if (!employerId) {
+    res.status(403).json({ message: 'Not authorized' });
+    return;
+  }
+
+  const reopened = await jobsService.reopen(jobId, employerId);
+  if (!reopened) {
+    res.status(404).json({ message: 'Job not found or not owned by you' });
+    return;
+  }
+
+  res.json(reopened);
+}
+
 export async function getJobApplicants(req: AuthRequest, res: Response): Promise<void> {
   const { jobId } = req.params;
   const userId = req.user!.userId;

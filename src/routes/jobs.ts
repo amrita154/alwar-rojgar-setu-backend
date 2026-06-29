@@ -7,6 +7,7 @@ import {
   createJob,
   updateJob,
   closeJob,
+  reopenJob,
   getJobApplicants,
 } from '../controllers/jobs';
 
@@ -21,6 +22,7 @@ router.get('/:jobId', getJob);
 router.post('/', authenticate, requireRole('employer'), createJob);
 router.patch('/:jobId', authenticate, requireRole('employer'), updateJob);
 router.patch('/:jobId/close', authenticate, requireRole('employer'), closeJob);
+router.patch('/:jobId/reopen', authenticate, requireRole('employer'), reopenJob);
 
 // Employer/Admin routes
 router.get('/:jobId/applications', authenticate, requireRole('employer', 'admin'), getJobApplicants);

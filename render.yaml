@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: alwar-rojgar-setu-backend
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false   # set manually in Render dashboard (copy from Neon)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRY
+        value: 1h
+      - key: JWT_REFRESH_EXPIRY
+        value: 30d
+      - key: OTP_EXPIRY_MINUTES
+        value: "10"
+      - key: OTP_MAX_ATTEMPTS
+        value: "5"
+      - key: SMS_PROVIDER
+        value: console
+      - key: CORS_ORIGIN
+        value: https://alwar-rojgar-setu-frontend.vercel.app
+      - key: MAX_FILE_SIZE_MB
+        value: "5"

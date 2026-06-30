@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { toCamelCase } from '../utils';
+import { uploadFile } from '../utils/storage';
 import * as employerService from '../services/employer';
 
 export async function createEmployerProfile(req: AuthRequest, res: Response): Promise<void> {
@@ -79,7 +80,7 @@ export async function uploadEmployerDocument(req: AuthRequest, res: Response): P
     return;
   }
 
-  const fileUrl = `/uploads/${req.file.filename}`;
+  const fileUrl = await uploadFile(req.file);
   const doc = await employerService.addDocument(employerId, documentType, fileUrl);
   res.status(201).json(doc);
 }

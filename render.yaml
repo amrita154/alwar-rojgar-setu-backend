@@ -22,6 +22,6 @@ services:
       - key: SMS_PROVIDER
         value: console
       - key: CORS_ORIGIN
-        value: https://alwar-rojgar-setu-frontend.vercel.app
+        value: https://alwar-rojgar-setu-frontend.vercel.app,http://localhost:5173
       - key: MAX_FILE_SIZE_MB
         value: "5"

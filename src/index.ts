@@ -20,8 +20,13 @@ const app = express();
 
 app.use(helmet());
 app.use(globalLimiter);
+// CORS_ORIGIN supports comma-separated list for multiple allowed origins
+const allowedOrigins = config.cors.origin.split(',').map((o) => o.trim());
 app.use(cors({
-  origin: config.cors.origin,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) callback(null, true);
+    else callback(new Error(`CORS: ${origin} not allowed`));
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -47,9 +52,13 @@ app.use('/api/v1/documents', documentRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-app.listen(config.port, () => {
-  console.log(`Server running on port ${config.port} (${config.nodeEnv})`);
-  console.log(`API base: http://localhost:${config.port}/api/v1`);
-});
+// Vercel sets VERCEL=1 and invokes this as a serverless function via the
+// default export — skip app.listen() there; bind normally everywhere else.
+if (!process.env.VERCEL) {
+  app.listen(config.port, () => {
+    console.log(`Server running on port ${config.port} (${config.nodeEnv})`);
+    console.log(`API base: http://localhost:${config.port}/api/v1`);
+  });
+}
 
 export default app;

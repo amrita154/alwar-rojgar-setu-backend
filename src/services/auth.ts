@@ -5,7 +5,15 @@ import { pool } from '../config/database';
 import { config } from '../config';
 import { Role, JwtPayload } from '../types';
 
-export function generateOtp(): string {
+// Demo accounts always get a fixed OTP so live demos work without real SMS.
+export const DEMO_OTP = '123456';
+const DEMO_PHONES = new Set([
+  '+911111111111', // demo employer
+  '+912222222222', // demo job seeker
+]);
+
+export function generateOtp(phone?: string): string {
+  if (phone && DEMO_PHONES.has(phone)) return DEMO_OTP;
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 

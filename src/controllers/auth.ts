@@ -13,7 +13,7 @@ export async function requestOtp(req: Request, res: Response): Promise<void> {
   }
 
   await authService.clearExpiredOtps(phone);
-  const otp = authService.generateOtp();
+  const otp = authService.generateOtp(phone);
   await authService.createOtpRecord(phone, otp);
   await authService.sendOtp(phone, otp);
 

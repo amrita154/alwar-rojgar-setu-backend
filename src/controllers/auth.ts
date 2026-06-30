@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { config } from '../config';
 import { AuthRequest } from '../middleware/auth';
 import * as authService from '../services/auth';
+import { Role } from '../types';
 
 export async function requestOtp(req: Request, res: Response): Promise<void> {
   const { phone, role } = req.body;
@@ -40,7 +41,7 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const accessToken = authService.generateAccessToken(user.id as string, user.role as string);
+  const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
   const refreshToken = await authService.generateAndStoreRefreshToken(user.id as string);
 
   res.cookie('refreshToken', refreshToken, {
@@ -73,7 +74,7 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const accessToken = authService.generateAccessToken(user.id as string, user.role as string);
+  const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
   const newRefreshToken = await authService.generateAndStoreRefreshToken(user.id as string);
 
   res.cookie('refreshToken', newRefreshToken, {

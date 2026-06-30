@@ -96,7 +96,7 @@ export function generateAccessToken(userId: string, role: Role): string {
   return jwt.sign(
     { userId, role } as JwtPayload,
     config.jwt.secret,
-    { expiresIn: config.jwt.accessExpiry }
+    { expiresIn: config.jwt.accessExpiry as unknown as import('ms').StringValue }
   );
 }
 

@@ -18,6 +18,7 @@ import documentRoutes from './routes/documents';
 
 const app = express();
 
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(globalLimiter);
 // CORS_ORIGIN supports comma-separated list for multiple allowed origins

@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import { config } from '../config';
 
 export const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -23,4 +24,12 @@ export const otpIpLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many requests from this device. Try again later.' },
+});
+
+export const translationLimiter = rateLimit({
+  windowMs: config.translation.rateLimit.windowMs,
+  max: config.translation.rateLimit.max,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many translation requests. Please slow down.' },
 });

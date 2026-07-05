@@ -172,6 +172,15 @@ CREATE TABLE IF NOT EXISTS applications (
 CREATE INDEX IF NOT EXISTS idx_applications_candidate ON applications(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_applications_job ON applications(job_id);
 
+-- 8. Translation cache
+CREATE TABLE IF NOT EXISTS translation_cache (
+  source_hash CHAR(64) NOT NULL,
+  target_lang VARCHAR(10) NOT NULL,
+  translated_text TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (source_hash, target_lang)
+);
+
 -- Updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

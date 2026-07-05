@@ -35,4 +35,28 @@ export const config = {
   cors: {
     origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   },
+
+  admin: {
+    phoneAllowlist: (process.env.ADMIN_PHONE_ALLOWLIST || '')
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean),
+    registrationCode: process.env.ADMIN_REGISTRATION_CODE || '',
+  },
+
+  translation: {
+    provider: process.env.TRANSLATION_PROVIDER || 'google_free',
+    google: {
+      endpoint:
+        process.env.GOOGLE_TRANSLATE_ENDPOINT ||
+        'https://translate-pa.googleapis.com/v1/translateHtml',
+      apiKey: process.env.GOOGLE_TRANSLATE_API_KEY || 'AIzaSyATBXajvzQLTDHEQbcpq0Ihe0vWDHmO520',
+    },
+    maxTextsPerRequest: parseInt(process.env.TRANSLATION_MAX_TEXTS || '100', 10),
+    maxCharsPerRequest: parseInt(process.env.TRANSLATION_MAX_CHARS || '20000', 10),
+    rateLimit: {
+      windowMs: parseInt(process.env.TRANSLATION_RATE_WINDOW_MS || '60000', 10),
+      max: parseInt(process.env.TRANSLATION_RATE_MAX || '60', 10),
+    },
+  },
 } as const;

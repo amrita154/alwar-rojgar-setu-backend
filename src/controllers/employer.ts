@@ -85,6 +85,25 @@ export async function uploadEmployerDocument(req: AuthRequest, res: Response): P
   res.status(201).json(doc);
 }
 
+export async function uploadEmployerLogo(req: AuthRequest, res: Response): Promise<void> {
+  const userId = req.user!.userId;
+
+  if (!req.file) {
+    res.status(400).json({ message: 'File is required' });
+    return;
+  }
+
+  const profile = await employerService.getProfileByUserId(userId);
+  if (!profile) {
+    res.status(404).json({ message: 'Profile not found. Create profile first.' });
+    return;
+  }
+
+  const logoUrl = await uploadFile(req.file);
+  const updated = await employerService.updateProfile(userId, { logoUrl });
+  res.json(updated);
+}
+
 export async function deleteEmployerDocument(req: AuthRequest, res: Response): Promise<void> {
   const userId = req.user!.userId;
   const { documentId } = req.params;

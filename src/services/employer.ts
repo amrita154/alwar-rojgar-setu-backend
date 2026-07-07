@@ -12,12 +12,12 @@ export async function getProfileId(userId: string): Promise<string | null> {
 }
 
 export async function createProfile(userId: string, data: Record<string, unknown>) {
-  const { companyName, gstNumber, udyamNumber } = data;
+  const { companyName, gstNumber, udyamNumber, logoUrl, description } = data;
 
   const result = await pool.query(
-    `INSERT INTO employer_profiles (user_id, company_name, gst_number, udyam_number)
-     VALUES ($1, $2, $3, $4) RETURNING *`,
-    [userId, companyName, gstNumber || null, udyamNumber || null]
+    `INSERT INTO employer_profiles (user_id, company_name, gst_number, udyam_number, logo_url, description)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [userId, companyName, gstNumber || null, udyamNumber || null, logoUrl || null, description || null]
   );
 
   return toCamelCase(result.rows[0]);
@@ -28,6 +28,8 @@ export async function updateProfile(userId: string, data: Record<string, unknown
     companyName: 'company_name',
     gstNumber: 'gst_number',
     udyamNumber: 'udyam_number',
+    logoUrl: 'logo_url',
+    description: 'description',
   };
 
   const fields: string[] = [];

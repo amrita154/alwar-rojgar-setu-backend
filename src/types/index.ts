@@ -59,6 +59,8 @@ export interface EmployerProfileRow {
   id: string;
   user_id: string;
   company_name: string;
+  logo_url: string | null;
+  description: string | null;
   gst_number: string | null;
   udyam_number: string | null;
   status: EmployerStatus;

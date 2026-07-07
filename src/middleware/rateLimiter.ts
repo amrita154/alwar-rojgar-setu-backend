@@ -1,5 +1,12 @@
 import rateLimit from 'express-rate-limit';
+import type { Request } from 'express';
 import { config } from '../config';
+
+function getClientIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  const ip = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : req.ip;
+  return ip || 'unknown';
+}
 
 export const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -12,7 +19,10 @@ export const globalLimiter = rateLimit({
 export const otpPhoneLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   max: 3,
-  keyGenerator: (req) => req.body?.phone ?? req.ip ?? 'unknown',
+  keyGenerator: (req) => {
+    const phone = req.body?.phone;
+    return typeof phone === 'string' ? phone : getClientIp(req);
+  },
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many OTP requests for this number. Try again in 10 minutes.' },

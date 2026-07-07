@@ -102,3 +102,41 @@ export async function enableUser(req: AuthRequest, res: Response): Promise<void>
 
   res.json({ message: 'User enabled' });
 }
+
+export async function getAdmins(req: AuthRequest, res: Response): Promise<void> {
+  const { status, search } = req.query;
+  const { page, limit, offset } = parsePagination(req.query as { page?: string; limit?: string });
+
+  const { data, total } = await adminService.listAdmins({
+    status: status as string | undefined,
+    search: search as string | undefined,
+    limit,
+    offset,
+  });
+
+  res.json(paginatedResponse(data, total, page, limit));
+}
+
+export async function approveAdmin(req: AuthRequest, res: Response): Promise<void> {
+  const { userId } = req.params;
+  const updated = await adminService.setAdminStatus(userId, 'approved');
+
+  if (!updated) {
+    res.status(404).json({ message: 'Admin user not found' });
+    return;
+  }
+
+  res.json(updated);
+}
+
+export async function rejectAdmin(req: AuthRequest, res: Response): Promise<void> {
+  const { userId } = req.params;
+  const updated = await adminService.setAdminStatus(userId, 'rejected');
+
+  if (!updated) {
+    res.status(404).json({ message: 'Admin user not found' });
+    return;
+  }
+
+  res.json(updated);
+}

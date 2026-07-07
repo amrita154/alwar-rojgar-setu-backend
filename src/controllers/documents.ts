@@ -1,6 +1,9 @@
+import path from 'path';
+import fs from 'fs';
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { pool } from '../config/database';
+import { config } from '../config';
 
 const CANDIDATE_FILE_COLUMNS = [
   'photo_url',
@@ -11,6 +14,19 @@ const CANDIDATE_FILE_COLUMNS = [
   'degree_certificate_url',
   'experience_letter_url',
 ];
+
+function serveLocalOrRedirect(res: Response, storedUrl: string, filename: string): void {
+  if (storedUrl.startsWith('http')) {
+    res.redirect(storedUrl);
+    return;
+  }
+  const localPath = path.join(config.upload.dir, filename);
+  if (!fs.existsSync(localPath)) {
+    res.status(404).json({ message: 'File not found' });
+    return;
+  }
+  res.sendFile(localPath);
+}
 
 export async function serveDocument(req: AuthRequest, res: Response): Promise<void> {
   const { filename } = req.params;
@@ -62,8 +78,8 @@ export async function serveDocument(req: AuthRequest, res: Response): Promise<vo
     const storedUrl = CANDIDATE_FILE_COLUMNS.map((c) => row[c] as string | null)
       .find((u) => u && (u === legacyUrl || u.includes(filename)));
 
-    if (storedUrl && storedUrl.startsWith('http')) {
-      res.redirect(storedUrl);
+    if (storedUrl) {
+      serveLocalOrRedirect(res, storedUrl, filename);
     } else {
       res.status(404).json({ message: 'File not found' });
     }
@@ -88,11 +104,19 @@ export async function serveDocument(req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    if (storedUrl.startsWith('http')) {
-      res.redirect(storedUrl);
-    } else {
-      res.status(404).json({ message: 'File not found' });
-    }
+    serveLocalOrRedirect(res, storedUrl, filename);
+    return;
+  }
+
+  // Employer logo — public-ish; any authenticated user can view
+  const logoResult = await pool.query(
+    `SELECT logo_url FROM employer_profiles WHERE logo_url = $1 OR logo_url LIKE $2`,
+    [legacyUrl, `%${filename}`]
+  );
+
+  if (logoResult.rows.length > 0) {
+    const storedUrl: string = logoResult.rows[0].logo_url;
+    serveLocalOrRedirect(res, storedUrl, filename);
     return;
   }
 

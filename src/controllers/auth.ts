@@ -2,21 +2,27 @@ import { Request, Response } from 'express';
 import { config } from '../config';
 import { AuthRequest } from '../middleware/auth';
 import * as authService from '../services/auth';
+import * as adminService from '../services/admin';
 import { Role } from '../types';
 
 export async function requestOtp(req: Request, res: Response): Promise<void> {
   const { phone, role } = req.body;
+  console.log(`[AUTH] requestOtp | phone=${phone} | role=${role}`);
 
   if (!phone || typeof phone !== 'string') {
     res.status(400).json({ message: 'Phone number is required' });
     return;
   }
 
-  await authService.clearExpiredOtps(phone);
-  const otp = authService.generateOtp(phone);
-  await authService.createOtpRecord(phone, otp);
-  await authService.sendOtp(phone, otp);
+  try {
+    await authService.sendOtp(phone);
+  } catch (err) {
+    console.error('[AUTH] requestOtp FAILED:', err);
+    res.status(502).json({ message: 'Failed to send OTP. Please try again.' });
+    return;
+  }
 
+  console.log(`[AUTH] requestOtp SUCCESS | phone=${phone}`);
   res.status(200).json({ message: 'OTP sent successfully' });
 }
 
@@ -28,21 +34,38 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const validation = await authService.validateOtp(phone, otp);
+  console.log(`[AUTH] verifyOtp | phone=${phone} | role=${role} | provider=${config.otp.smsProvider}`);
+
+  const isMSG91 = config.otp.smsProvider === 'msg91';
+  const validation = isMSG91
+    ? await authService.verifyOtpWithMsg91(phone, otp)
+    : await authService.validateOtp(phone, otp);
+
   if (!validation.valid) {
+    console.warn(`[AUTH] verifyOtp FAILED | phone=${phone} | reason=${validation.error}`);
     res.status(validation.statusCode!).json({ message: validation.error });
     return;
   }
 
+  // Clean up local record on successful MSG91 verify
+  if (isMSG91) {
+    await authService.clearExpiredOtps(phone);
+    console.log(`[AUTH] Cleared local OTP record for ${phone}`);
+  }
+
+  console.log(`[AUTH] OTP verified | finding/creating user | phone=${phone} | role=${role}`);
   const { user } = await authService.findOrCreateUser(phone, role);
+  console.log(`[AUTH] User resolved | userId=${user.id} | role=${user.role} | isActive=${user.is_active}`);
 
   if (!user.is_active) {
+    console.warn(`[AUTH] Login blocked — account disabled | userId=${user.id}`);
     res.status(403).json({ message: 'Account is disabled. Contact support.' });
     return;
   }
 
   const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
   const refreshToken = await authService.generateAndStoreRefreshToken(user.id as string);
+  console.log(`[AUTH] Login SUCCESS | userId=${user.id} | role=${user.role}`);
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
@@ -86,6 +109,28 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
   });
 
   res.status(200).json({ accessToken });
+}
+
+export async function requestAdminAccess(req: Request, res: Response): Promise<void> {
+  const { name, phone } = req.body;
+
+  if (!name || typeof name !== 'string' || !phone || typeof phone !== 'string') {
+    res.status(400).json({ message: 'Name and phone are required' });
+    return;
+  }
+
+  try {
+    const user = await adminService.createAdminRequest(name.trim(), phone.trim());
+    console.log(`[AUTH] Admin request created | phone=${phone} | name=${name}`);
+    res.status(201).json(user);
+  } catch (err: unknown) {
+    const statusCode = (err as { statusCode?: number }).statusCode;
+    if (statusCode === 400 || statusCode === 409) {
+      res.status(statusCode).json({ message: (err as Error).message });
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function logout(req: AuthRequest, res: Response): Promise<void> {

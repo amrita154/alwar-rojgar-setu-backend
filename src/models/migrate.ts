@@ -104,6 +104,8 @@ CREATE TABLE IF NOT EXISTS employer_profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   company_name VARCHAR(255) NOT NULL,
+  logo_url VARCHAR(500),
+  description TEXT,
   gst_number VARCHAR(50),
   udyam_number VARCHAR(50),
   status employer_status NOT NULL DEFAULT 'pending',
@@ -113,6 +115,17 @@ CREATE TABLE IF NOT EXISTS employer_profiles (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
+
+-- Add logo_url and description columns if they don't exist (for existing databases)
+DO $$ BEGIN
+  ALTER TABLE employer_profiles ADD COLUMN logo_url VARCHAR(500);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE employer_profiles ADD COLUMN description TEXT;
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
 
 -- 5. Employer Documents table
 CREATE TABLE IF NOT EXISTS employer_documents (
@@ -171,6 +184,31 @@ CREATE TABLE IF NOT EXISTS applications (
 
 CREATE INDEX IF NOT EXISTS idx_applications_candidate ON applications(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_applications_job ON applications(job_id);
+
+-- 8. Translation cache
+CREATE TABLE IF NOT EXISTS translation_cache (
+  source_hash CHAR(64) NOT NULL,
+  target_lang VARCHAR(10) NOT NULL,
+  translated_text TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (source_hash, target_lang)
+);
+
+-- Admin status enum and columns (idempotent)
+DO $$ BEGIN
+  CREATE TYPE admin_status AS ENUM ('pending', 'approved', 'rejected');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN name VARCHAR(255);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN admin_status admin_status;
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
 
 -- Updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()

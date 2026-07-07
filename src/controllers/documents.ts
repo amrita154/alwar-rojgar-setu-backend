@@ -1,8 +1,9 @@
-import { Response } from 'express';
 import path from 'path';
+import fs from 'fs';
+import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { config } from '../config';
 import { pool } from '../config/database';
+import { config } from '../config';
 
 const CANDIDATE_FILE_COLUMNS = [
   'photo_url',
@@ -14,34 +15,46 @@ const CANDIDATE_FILE_COLUMNS = [
   'experience_letter_url',
 ];
 
+function serveLocalOrRedirect(res: Response, storedUrl: string, filename: string): void {
+  if (storedUrl.startsWith('http')) {
+    res.redirect(storedUrl);
+    return;
+  }
+  const localPath = path.join(config.upload.dir, filename);
+  if (!fs.existsSync(localPath)) {
+    res.status(404).json({ message: 'File not found' });
+    return;
+  }
+  res.sendFile(localPath);
+}
+
 export async function serveDocument(req: AuthRequest, res: Response): Promise<void> {
   const { filename } = req.params;
 
-  // Prevent path traversal
   if (filename.includes('/') || filename.includes('..')) {
     res.status(400).json({ message: 'Invalid filename' });
     return;
   }
 
-  const fileUrl = `/uploads/${filename}`;
+  // Support both legacy `/uploads/uuid.ext` paths and bare `uuid.ext` lookups
+  const legacyUrl = `/uploads/${filename}`;
   const requesterId = req.user!.userId;
   const requesterRole = req.user!.role;
 
-  // Check candidate files
-  const colChecks = CANDIDATE_FILE_COLUMNS.map((col) => `${col} = $1`).join(' OR ');
+  const colChecks = CANDIDATE_FILE_COLUMNS.map((col) => `(${col} = $1 OR ${col} LIKE $2)`).join(' OR ');
   const candidateResult = await pool.query(
-    `SELECT user_id FROM candidate_profiles WHERE ${colChecks}`,
-    [fileUrl]
+    `SELECT user_id, ${CANDIDATE_FILE_COLUMNS.join(', ')} FROM candidate_profiles WHERE ${colChecks}`,
+    [legacyUrl, `%${filename}`]
   );
 
   if (candidateResult.rows.length > 0) {
-    const ownerUserId: string = candidateResult.rows[0].user_id;
+    const row = candidateResult.rows[0];
+    const ownerUserId: string = row.user_id;
     const isOwner = ownerUserId === requesterId;
     const isAdmin = requesterRole === 'admin';
 
     if (!isOwner && !isAdmin) {
       if (requesterRole === 'employer') {
-        // Allow if employer has at least one application from this candidate
         const appResult = await pool.query(
           `SELECT a.id FROM applications a
            JOIN candidate_profiles cp ON cp.id = a.candidate_id
@@ -61,20 +74,28 @@ export async function serveDocument(req: AuthRequest, res: Response): Promise<vo
       }
     }
 
-    res.sendFile(path.join(config.upload.dir, filename));
+    // Find the actual stored URL for this filename
+    const storedUrl = CANDIDATE_FILE_COLUMNS.map((c) => row[c] as string | null)
+      .find((u) => u && (u === legacyUrl || u.includes(filename)));
+
+    if (storedUrl) {
+      serveLocalOrRedirect(res, storedUrl, filename);
+    } else {
+      res.status(404).json({ message: 'File not found' });
+    }
     return;
   }
 
-  // Check employer documents
   const employerDocResult = await pool.query(
-    `SELECT ep.user_id FROM employer_documents ed
+    `SELECT ep.user_id, ed.document_url FROM employer_documents ed
      JOIN employer_profiles ep ON ep.id = ed.employer_id
-     WHERE ed.document_url = $1`,
-    [fileUrl]
+     WHERE ed.document_url = $1 OR ed.document_url LIKE $2`,
+    [legacyUrl, `%${filename}`]
   );
 
   if (employerDocResult.rows.length > 0) {
     const ownerUserId: string = employerDocResult.rows[0].user_id;
+    const storedUrl: string = employerDocResult.rows[0].document_url;
     const isOwner = ownerUserId === requesterId;
     const isAdmin = requesterRole === 'admin';
 
@@ -83,7 +104,19 @@ export async function serveDocument(req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    res.sendFile(path.join(config.upload.dir, filename));
+    serveLocalOrRedirect(res, storedUrl, filename);
+    return;
+  }
+
+  // Employer logo — public-ish; any authenticated user can view
+  const logoResult = await pool.query(
+    `SELECT logo_url FROM employer_profiles WHERE logo_url = $1 OR logo_url LIKE $2`,
+    [legacyUrl, `%${filename}`]
+  );
+
+  if (logoResult.rows.length > 0) {
+    const storedUrl: string = logoResult.rows[0].logo_url;
+    serveLocalOrRedirect(res, storedUrl, filename);
     return;
   }
 

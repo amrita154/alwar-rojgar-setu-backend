@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { parsePagination, paginatedResponse } from '../utils';
+import { uploadFile } from '../utils/storage';
 import * as candidateService from '../services/candidate';
 
 export async function createCandidateProfile(req: AuthRequest, res: Response): Promise<void> {
@@ -53,7 +54,7 @@ export async function uploadResume(req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  const fileUrl = `/uploads/${req.file.filename}`;
+  const fileUrl = await uploadFile(req.file);
   const result = await candidateService.setFileUrl(userId, 'resume_url', fileUrl);
 
   if (!result) {
@@ -71,7 +72,7 @@ export async function uploadAadhaar(req: AuthRequest, res: Response): Promise<vo
     return;
   }
 
-  const fileUrl = `/uploads/${req.file.filename}`;
+  const fileUrl = await uploadFile(req.file);
   const result = await candidateService.setFileUrl(userId, 'aadhaar_url', fileUrl);
 
   if (!result) {
@@ -103,7 +104,7 @@ export async function uploadCertificate(req: AuthRequest, res: Response): Promis
     return;
   }
 
-  const fileUrl = `/uploads/${req.file.filename}`;
+  const fileUrl = await uploadFile(req.file);
   const result = await candidateService.setFileUrl(userId, column, fileUrl);
 
   if (!result) {

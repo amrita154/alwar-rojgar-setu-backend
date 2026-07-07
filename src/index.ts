@@ -1,4 +1,5 @@
 import express from 'express';
+import 'express-async-errors';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -15,6 +16,7 @@ import applicationRoutes from './routes/applications';
 import adminRoutes from './routes/admin';
 import statsRoutes from './routes/stats';
 import documentRoutes from './routes/documents';
+import translateRoutes from './routes/translate';
 
 const app = express();
 
@@ -48,6 +50,7 @@ app.use('/api/v1/job-applications', applicationRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/stats', statsRoutes);
 app.use('/api/v1/documents', documentRoutes);
+app.use('/api/v1/translate', translateRoutes);
 
 // Error handling
 app.use(notFound);

@@ -39,7 +39,7 @@ export async function search(filters: {
 
   params.push(filters.limit, filters.offset);
   const result = await pool.query(
-    `SELECT j.*, ep.company_name
+    `SELECT j.*, ep.company_name, ep.logo_url as company_logo_url, ep.description as company_description
      FROM jobs j
      LEFT JOIN employer_profiles ep ON ep.id = j.employer_id
      ${where}
@@ -53,7 +53,7 @@ export async function search(filters: {
 
 export async function getById(jobId: string) {
   const result = await pool.query(
-    `SELECT j.*, ep.company_name
+    `SELECT j.*, ep.company_name, ep.logo_url as company_logo_url, ep.description as company_description
      FROM jobs j
      LEFT JOIN employer_profiles ep ON ep.id = j.employer_id
      WHERE j.id = $1`,
@@ -64,7 +64,7 @@ export async function getById(jobId: string) {
 
 export async function getOwned(employerId: string) {
   const result = await pool.query(
-    `SELECT j.*, ep.company_name
+    `SELECT j.*, ep.company_name, ep.logo_url as company_logo_url, ep.description as company_description
      FROM jobs j
      LEFT JOIN employer_profiles ep ON ep.id = j.employer_id
      WHERE j.employer_id = $1

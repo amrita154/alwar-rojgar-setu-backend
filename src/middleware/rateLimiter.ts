@@ -4,8 +4,10 @@ import { config } from '../config';
 
 function getClientIp(req: Request): string {
   const forwarded = req.headers['x-forwarded-for'];
-  const ip = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : req.ip;
-  return ip || 'unknown';
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.socket.remoteAddress || 'unknown';
 }
 
 export const globalLimiter = rateLimit({
@@ -23,6 +25,7 @@ export const loginLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: 'Too many login attempts. Try again in 15 minutes.' },
   keyGenerator: getClientIp,
+  skip: (req: Request) => !req.body?.email,
 });
 
 export const registerLimiter = rateLimit({
@@ -32,6 +35,7 @@ export const registerLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: 'Too many registration attempts. Try again later.' },
   keyGenerator: getClientIp,
+  skip: (req: Request) => !req.body?.email,
 });
 
 export const translationLimiter = rateLimit({

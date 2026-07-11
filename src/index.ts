@@ -3,6 +3,8 @@ import 'express-async-errors';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import session from 'express-session';
+import SQLiteStore from 'connect-sqlite3';
 import passport from 'passport';
 import { config } from './config';
 import { errorHandler, notFound } from './middleware/errorHandler';
@@ -21,6 +23,7 @@ import documentRoutes from './routes/documents';
 import translateRoutes from './routes/translate';
 
 const app = express();
+const SessionStore = SQLiteStore(session);
 
 app.set('trust proxy', 1);
 app.use(helmet());
@@ -35,7 +38,23 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
+
+// Session middleware for Passport OAuth flow
+app.use(session({
+  store: new SessionStore({ db: 'sessions.db', dir: './sessions' }),
+  secret: config.jwt.secret,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: config.nodeEnv === 'production',
+    httpOnly: true,
+    sameSite: 'strict',
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  },
+}));
+
 app.use(passport.initialize());
+app.use(passport.session());
 
 // Health check
 app.get('/api/v1/health', (_req, res) => {

@@ -171,6 +171,70 @@ export async function findOrCreateUser(phone: string, requestedRole?: string): P
   return { user: userResult.rows[0], isNew: false };
 }
 
+export interface AuthError extends Error {
+  statusCode: number;
+}
+
+function authError(message: string, statusCode: number): AuthError {
+  return Object.assign(new Error(message), { statusCode });
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Register a new user with email + password. Returns the created user row. */
+export async function registerWithEmail(
+  emailRaw: string,
+  password: string,
+  requestedRole?: string,
+  adminInviteCode?: string,
+): Promise<Record<string, unknown>> {
+  const email = emailRaw.trim().toLowerCase();
+
+  if (!EMAIL_RE.test(email)) throw authError('Enter a valid email address', 400);
+  if (!password || password.length < 8) {
+    throw authError('Password must be at least 8 characters', 400);
+  }
+
+  const validRoles: Role[] = ['candidate', 'employer', 'admin'];
+  const role: Role = validRoles.includes(requestedRole as Role) ? (requestedRole as Role) : 'candidate';
+
+  // Admin sign-up requires the shared registration code (defense in depth).
+  let adminStatus: string | null = null;
+  if (role === 'admin') {
+    if (!config.admin.registrationCode || adminInviteCode !== config.admin.registrationCode) {
+      throw authError('Invalid admin registration code', 403);
+    }
+    adminStatus = 'approved';
+  }
+
+  const existing = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1', [email]);
+  if (existing.rows.length > 0) throw authError('An account with this email already exists', 409);
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const result = await pool.query(
+    `INSERT INTO users (email, password_hash, role, is_active, admin_status)
+     VALUES ($1, $2, $3, true, $4) RETURNING *`,
+    [email, passwordHash, role, adminStatus],
+  );
+  return result.rows[0];
+}
+
+/** Validate email + password credentials. Returns the user row or null. */
+export async function loginWithEmail(
+  emailRaw: string,
+  password: string,
+): Promise<Record<string, unknown> | null> {
+  const email = emailRaw.trim().toLowerCase();
+  const result = await pool.query('SELECT * FROM users WHERE LOWER(email) = $1', [email]);
+  if (result.rows.length === 0) return null;
+
+  const user = result.rows[0];
+  if (!user.password_hash) return null; // OTP-only account, no password set
+
+  const ok = await bcrypt.compare(password, user.password_hash as string);
+  return ok ? user : null;
+}
+
 export function generateAccessToken(userId: string, role: Role): string {
   return jwt.sign(
     { userId, role } as JwtPayload,

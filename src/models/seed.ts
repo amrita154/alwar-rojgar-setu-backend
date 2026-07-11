@@ -1,23 +1,42 @@
+import bcrypt from 'bcrypt';
 import { pool } from '../config/database';
+
+// Demo credentials — kept in sync with the frontend DemoLoginPanel.
+const DEMO_PASSWORDS = {
+  admin: 'Admin@123',
+  employer: 'Employer@123',
+  candidate: 'Candidate@123',
+  new: 'Password@123',
+};
 
 async function seed() {
   console.log('Seeding database...');
   try {
-    // Admin (seeded admins are pre-approved so the Admin Users tab shows a valid status)
-    await pool.query(`
-      INSERT INTO users (id, phone, role, is_active, name, admin_status)
-      VALUES ('00000000-0000-0000-0000-000000000001', '+919999999999', 'admin', true, 'District Admin', 'approved')
-      ON CONFLICT (phone) DO UPDATE
-        SET name = COALESCE(users.name, EXCLUDED.name),
-            admin_status = COALESCE(users.admin_status, EXCLUDED.admin_status)
-    `);
+    const adminHash = await bcrypt.hash(DEMO_PASSWORDS.admin, 10);
+    const employerHash = await bcrypt.hash(DEMO_PASSWORDS.employer, 10);
+    const candidateHash = await bcrypt.hash(DEMO_PASSWORDS.candidate, 10);
+    const newHash = await bcrypt.hash(DEMO_PASSWORDS.new, 10);
 
-    // Demo Employer (+911111111111, OTP always 123456)
-    await pool.query(`
-      INSERT INTO users (id, phone, role, is_active)
-      VALUES ('00000000-0000-0000-0000-000000000002', '+911111111111', 'employer', true)
-      ON CONFLICT (phone) DO NOTHING
-    `);
+    // Admin (seeded admins are pre-approved so the Admin Users tab shows a valid status)
+    await pool.query(
+      `INSERT INTO users (id, phone, email, password_hash, role, is_active, name, admin_status)
+       VALUES ('00000000-0000-0000-0000-000000000001', '+919999999999', 'admin@alwar-rojgar.gov.in', $1, 'admin', true, 'District Admin', 'approved')
+       ON CONFLICT (phone) DO UPDATE
+         SET name = COALESCE(users.name, EXCLUDED.name),
+             admin_status = COALESCE(users.admin_status, EXCLUDED.admin_status),
+             email = EXCLUDED.email,
+             password_hash = EXCLUDED.password_hash`,
+      [adminHash],
+    );
+
+    // Demo Employer (email: demo.employer@example.com / Employer@123)
+    await pool.query(
+      `INSERT INTO users (id, phone, email, password_hash, role, is_active)
+       VALUES ('00000000-0000-0000-0000-000000000002', '+911111111111', 'demo.employer@example.com', $1, 'employer', true)
+       ON CONFLICT (phone) DO UPDATE
+         SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash`,
+      [employerHash],
+    );
     await pool.query(`
       INSERT INTO employer_profiles (
         id, user_id, company_name, gst_number, status,
@@ -45,12 +64,30 @@ async function seed() {
       ON CONFLICT DO NOTHING
     `);
 
-    // Demo Job Seeker (+912222222222, OTP always 123456)
-    await pool.query(`
-      INSERT INTO users (id, phone, role, is_active)
-      VALUES ('00000000-0000-0000-0000-000000000003', '+912222222222', 'candidate', true)
-      ON CONFLICT (phone) DO NOTHING
-    `);
+    // Demo Job Seeker (email: demo.candidate@example.com / Candidate@123)
+    await pool.query(
+      `INSERT INTO users (id, phone, email, password_hash, role, is_active)
+       VALUES ('00000000-0000-0000-0000-000000000003', '+912222222222', 'demo.candidate@example.com', $1, 'candidate', true)
+       ON CONFLICT (phone) DO UPDATE
+         SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash`,
+      [candidateHash],
+    );
+
+    // New (empty-profile) demo accounts — used to demo the onboarding flow.
+    await pool.query(
+      `INSERT INTO users (id, phone, email, password_hash, role, is_active)
+       VALUES ('00000000-0000-0000-0000-000000000004', '+912222222223', 'newcandidate@example.com', $1, 'candidate', true)
+       ON CONFLICT (phone) DO UPDATE
+         SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash`,
+      [newHash],
+    );
+    await pool.query(
+      `INSERT INTO users (id, phone, email, password_hash, role, is_active)
+       VALUES ('00000000-0000-0000-0000-000000000005', '+911111111112', 'newemployer@example.com', $1, 'employer', true)
+       ON CONFLICT (phone) DO UPDATE
+         SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash`,
+      [newHash],
+    );
     await pool.query(`
       INSERT INTO candidate_profiles (
         id, user_id, full_name, email, phone, description,
@@ -161,12 +198,14 @@ async function seed() {
     }
 
     console.log('');
-    console.log('Seed complete.');
-    console.log('──────────────────────────────────────────');
-    console.log('Admin         +919999999999  OTP: any (random)');
-    console.log('Demo Employer +911111111111  OTP: 123456');
-    console.log('Demo Seeker   +912222222222  OTP: 123456');
-    console.log('──────────────────────────────────────────');
+    console.log('Seed complete. Email/password logins:');
+    console.log('────────────────────────────────────────────────────────────');
+    console.log('Admin         admin@alwar-rojgar.gov.in   Admin@123');
+    console.log('Employer      demo.employer@example.com   Employer@123');
+    console.log('Job Seeker    demo.candidate@example.com  Candidate@123');
+    console.log('New Employer  newemployer@example.com     Password@123');
+    console.log('New Seeker    newcandidate@example.com    Password@123');
+    console.log('────────────────────────────────────────────────────────────');
   } catch (err) {
     console.error('Seed failed:', err);
     process.exit(1);

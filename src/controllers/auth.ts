@@ -78,6 +78,70 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
   res.status(200).json({ accessToken });
 }
 
+function setRefreshCookie(res: Response, refreshToken: string): void {
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: config.nodeEnv === 'production',
+    sameSite: 'strict',
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+    path: '/',
+  });
+}
+
+export async function register(req: Request, res: Response): Promise<void> {
+  const { email, password, role, adminInviteCode } = req.body;
+
+  if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+    res.status(400).json({ message: 'Email and password are required' });
+    return;
+  }
+
+  try {
+    const user = await authService.registerWithEmail(email, password, role, adminInviteCode);
+    const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
+    const refresh = await authService.generateAndStoreRefreshToken(user.id as string);
+    console.log(`[AUTH] Register SUCCESS | userId=${user.id} | role=${user.role}`);
+    setRefreshCookie(res, refresh);
+    res.status(201).json({ accessToken });
+  } catch (err: unknown) {
+    const statusCode = (err as { statusCode?: number }).statusCode;
+    if (statusCode) {
+      res.status(statusCode).json({ message: (err as Error).message });
+      return;
+    }
+    console.error('[AUTH] Register FAILED:', err);
+    res.status(500).json({ message: 'Registration failed. Please try again.' });
+  }
+}
+
+export async function login(req: Request, res: Response): Promise<void> {
+  const { email, password } = req.body;
+
+  if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+    res.status(400).json({ message: 'Email and password are required' });
+    return;
+  }
+
+  const user = await authService.loginWithEmail(email, password);
+  if (!user) {
+    console.warn(`[AUTH] Login FAILED | invalid credentials`);
+    res.status(401).json({ message: 'Invalid email or password' });
+    return;
+  }
+
+  if (!user.is_active) {
+    console.warn(`[AUTH] Login blocked — account disabled | userId=${user.id}`);
+    res.status(403).json({ message: 'Account is disabled. Contact support.' });
+    return;
+  }
+
+  const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
+  const refresh = await authService.generateAndStoreRefreshToken(user.id as string);
+  console.log(`[AUTH] Login SUCCESS | userId=${user.id} | role=${user.role}`);
+  setRefreshCookie(res, refresh);
+  res.status(200).json({ accessToken });
+}
+
 export async function refreshToken(req: Request, res: Response): Promise<void> {
   const token = req.cookies?.refreshToken;
 

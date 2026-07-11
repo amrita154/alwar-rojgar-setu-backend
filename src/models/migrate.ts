@@ -49,7 +49,9 @@ END $$;
 -- 1. Users table
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  phone VARCHAR(15) NOT NULL UNIQUE,
+  phone VARCHAR(15) UNIQUE,
+  email VARCHAR(255) UNIQUE,
+  password_hash VARCHAR(255),
   role user_role NOT NULL,
   is_active BOOLEAN NOT NULL DEFAULT true,
   refresh_token TEXT,
@@ -257,6 +259,28 @@ END $$;
 -- Backfill: existing admin users created before admin_status existed default to 'approved'
 -- (prevents a null status from breaking the Admin Users tab).
 UPDATE users SET admin_status = 'approved' WHERE role = 'admin' AND admin_status IS NULL;
+
+-- Email/password auth columns (idempotent for existing databases)
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN email VARCHAR(255);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN password_hash VARCHAR(255);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
+EXCEPTION WHEN duplicate_object THEN null; WHEN duplicate_table THEN null;
+END $$;
+
+-- Phone is optional now that email/password is the primary login method.
+DO $$ BEGIN
+  ALTER TABLE users ALTER COLUMN phone DROP NOT NULL;
+EXCEPTION WHEN others THEN null;
+END $$;
 
 -- Updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()

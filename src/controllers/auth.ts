@@ -2,80 +2,130 @@ import { Request, Response } from 'express';
 import { config } from '../config';
 import { AuthRequest } from '../middleware/auth';
 import * as authService from '../services/auth';
-import * as adminService from '../services/admin';
 import { Role } from '../types';
 
-export async function requestOtp(req: Request, res: Response): Promise<void> {
-  const { phone, role } = req.body;
-  console.log(`[AUTH] requestOtp | phone=${phone} | role=${role}`);
+export async function register(req: Request, res: Response): Promise<void> {
+  const { email, password, role, adminInviteCode } = req.body;
 
-  if (!phone || typeof phone !== 'string') {
-    res.status(400).json({ message: 'Phone number is required' });
+  if (!email || typeof email !== 'string' || !password || typeof password !== 'string' || !role) {
+    res.status(400).json({ message: 'Email, password, and role are required' });
+    return;
+  }
+
+  if (password.length < 8) {
+    res.status(400).json({ message: 'Password must be at least 8 characters long' });
+    return;
+  }
+
+  const validRoles: Role[] = ['candidate', 'employer', 'admin'];
+  if (!validRoles.includes(role)) {
+    res.status(400).json({ message: 'Invalid role' });
     return;
   }
 
   try {
-    await authService.sendOtp(phone);
-  } catch (err) {
-    console.error('[AUTH] requestOtp FAILED:', err);
-    res.status(502).json({ message: 'Failed to send OTP. Please try again.' });
-    return;
-  }
+    const user = await authService.registerWithEmailPassword(email.toLowerCase(), password, role, adminInviteCode);
+    console.log(`[AUTH] User registered | email=${email} | role=${role} | userId=${user.id}`);
 
-  console.log(`[AUTH] requestOtp SUCCESS | phone=${phone}`);
-  res.status(200).json({ message: 'OTP sent successfully' });
+    const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
+    const refreshToken = await authService.generateAndStoreRefreshToken(user.id as string);
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: config.nodeEnv === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    res.status(201).json({ accessToken });
+  } catch (err) {
+    console.error('[AUTH] Register FAILED:', err);
+    if ((err as Error).message.includes('invite code')) {
+      res.status(401).json({ message: 'Invalid admin invite code' });
+      return;
+    }
+    res.status(500).json({ message: 'Registration failed' });
+  }
 }
 
-export async function verifyOtp(req: Request, res: Response): Promise<void> {
-  const { phone, otp, role } = req.body;
+export async function login(req: Request, res: Response): Promise<void> {
+  const { email, password } = req.body;
 
-  if (!phone || !otp) {
-    res.status(400).json({ message: 'Phone and OTP are required' });
+  if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+    res.status(400).json({ message: 'Email and password are required' });
     return;
   }
 
-  console.log(`[AUTH] verifyOtp | phone=${phone} | role=${role} | provider=${config.otp.smsProvider}`);
+  try {
+    const validation = await authService.loginWithEmailPassword(email.toLowerCase(), password);
 
-  const isMSG91 = config.otp.smsProvider === 'msg91';
-  const validation = isMSG91
-    ? await authService.verifyOtpWithMsg91(phone, otp)
-    : await authService.validateOtp(phone, otp);
+    if (!validation.valid) {
+      console.warn(`[AUTH] Login FAILED | email=${email} | reason=${validation.error}`);
+      res.status(validation.statusCode!).json({ message: validation.error });
+      return;
+    }
 
-  if (!validation.valid) {
-    console.warn(`[AUTH] verifyOtp FAILED | phone=${phone} | reason=${validation.error}`);
-    res.status(validation.statusCode!).json({ message: validation.error });
+    const { pool } = await import('../config/database');
+    const result = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email.toLowerCase()]
+    );
+    const userResult = result.rows[0];
+
+    const accessToken = authService.generateAccessToken(userResult.id as string, userResult.role as Role);
+    const refreshToken = await authService.generateAndStoreRefreshToken(userResult.id as string);
+
+    console.log(`[AUTH] Login SUCCESS | email=${email} | userId=${userResult.id} | role=${userResult.role}`);
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: config.nodeEnv === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    res.status(200).json({ accessToken });
+  } catch (err) {
+    console.error('[AUTH] Login FAILED:', err);
+    res.status(500).json({ message: 'Login failed' });
+  }
+}
+
+export async function googleCallback(req: AuthRequest, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: 'Authentication failed' });
     return;
   }
 
-  // Clean up local record on successful MSG91 verify
-  if (isMSG91) {
-    await authService.clearExpiredOtps(phone);
-    console.log(`[AUTH] Cleared local OTP record for ${phone}`);
-  }
-
-  console.log(`[AUTH] OTP verified | finding/creating user | phone=${phone} | role=${role}`);
-  const { user } = await authService.findOrCreateUser(phone, role);
-  console.log(`[AUTH] User resolved | userId=${user.id} | role=${user.role} | isActive=${user.is_active}`);
+  const user = req.user as Record<string, unknown>;
 
   if (!user.is_active) {
     console.warn(`[AUTH] Login blocked — account disabled | userId=${user.id}`);
-    res.status(403).json({ message: 'Account is disabled. Contact support.' });
+    res.redirect(`${config.frontend.url}/auth/google/callback?status=disabled`);
     return;
   }
 
-  const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
-  const refreshToken = await authService.generateAndStoreRefreshToken(user.id as string);
-  console.log(`[AUTH] Login SUCCESS | userId=${user.id} | role=${user.role}`);
+  try {
+    const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
+    const refreshToken = await authService.generateAndStoreRefreshToken(user.id as string);
 
-  res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: config.nodeEnv === 'production',
-    sameSite: 'strict',
-    maxAge: 30 * 24 * 60 * 60 * 1000,
-    path: '/',
-  });
+    console.log(`[AUTH] Google login SUCCESS | userId=${user.id} | email=${user.email}`);
 
-  res.status(200).json({ accessToken });
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: config.nodeEnv === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    res.redirect(`${config.frontend.url}/auth/google/callback?status=success&token=${accessToken}`);
+  } catch (err) {
+    console.error('[AUTH] Google callback FAILED:', err);
+    res.redirect(`${config.frontend.url}/auth/google/callback?status=error`);
+  }
 }
 
 export async function refreshToken(req: Request, res: Response): Promise<void> {
@@ -109,28 +159,6 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
   });
 
   res.status(200).json({ accessToken });
-}
-
-export async function requestAdminAccess(req: Request, res: Response): Promise<void> {
-  const { name, phone } = req.body;
-
-  if (!name || typeof name !== 'string' || !phone || typeof phone !== 'string') {
-    res.status(400).json({ message: 'Name and phone are required' });
-    return;
-  }
-
-  try {
-    const user = await adminService.createAdminRequest(name.trim(), phone.trim());
-    console.log(`[AUTH] Admin request created | phone=${phone} | name=${name}`);
-    res.status(201).json(user);
-  } catch (err: unknown) {
-    const statusCode = (err as { statusCode?: number }).statusCode;
-    if (statusCode === 400 || statusCode === 409) {
-      res.status(statusCode).json({ message: (err as Error).message });
-      return;
-    }
-    throw err;
-  }
 }
 
 export async function logout(req: AuthRequest, res: Response): Promise<void> {

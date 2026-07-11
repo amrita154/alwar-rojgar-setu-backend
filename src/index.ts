@@ -3,9 +3,11 @@ import 'express-async-errors';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import passport from 'passport';
 import { config } from './config';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { globalLimiter } from './middleware/rateLimiter';
+import './config/passport';
 
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
@@ -23,10 +25,9 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(helmet());
 app.use(globalLimiter);
-// CORS_ORIGIN supports comma-separated list for multiple allowed origins
-const allowedOrigins = config.cors.origin.split(',').map((o) => o.trim());
 app.use(cors({
   origin: (origin, callback) => {
+    const allowedOrigins = config.cors.origin.split(',').map((o) => o.trim());
     if (!origin || allowedOrigins.includes(origin)) callback(null, true);
     else callback(new Error(`CORS: ${origin} not allowed`));
   },
@@ -34,6 +35,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
+app.use(passport.initialize());
 
 // Health check
 app.get('/api/v1/health', (_req, res) => {
@@ -56,8 +58,6 @@ app.use('/api/v1/translate', translateRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-// Vercel sets VERCEL=1 and invokes this as a serverless function via the
-// default export — skip app.listen() there; bind normally everywhere else.
 if (!process.env.VERCEL) {
   app.listen(config.port, () => {
     console.log(`Server running on port ${config.port} (${config.nodeEnv})`);

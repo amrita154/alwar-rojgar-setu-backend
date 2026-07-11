@@ -16,24 +16,22 @@ export const globalLimiter = rateLimit({
   message: { message: 'Too many requests. Try again later.' },
 });
 
-export const otpPhoneLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 3,
-  keyGenerator: (req) => {
-    const phone = req.body?.phone;
-    return typeof phone === 'string' ? phone : getClientIp(req);
-  },
+export const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Too many OTP requests for this number. Try again in 10 minutes.' },
+  message: { message: 'Too many login attempts. Try again in 15 minutes.' },
+  keyGenerator: getClientIp,
 });
 
-export const otpIpLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 10,
+export const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Too many requests from this device. Try again later.' },
+  message: { message: 'Too many registration attempts. Try again later.' },
+  keyGenerator: getClientIp,
 });
 
 export const translationLimiter = rateLimit({

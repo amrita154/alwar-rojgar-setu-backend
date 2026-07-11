@@ -46,29 +46,27 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null;
 END $$;
 
+-- Admin status enum
+DO $$ BEGIN
+  CREATE TYPE admin_status AS ENUM ('pending', 'approved', 'rejected');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
 -- 1. Users table
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  phone VARCHAR(15) NOT NULL UNIQUE,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash VARCHAR(255),
+  google_id VARCHAR(255) UNIQUE,
   role user_role NOT NULL,
   is_active BOOLEAN NOT NULL DEFAULT true,
   refresh_token TEXT,
   refresh_token_expiry TIMESTAMP WITH TIME ZONE,
+  name VARCHAR(255),
+  admin_status admin_status,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
-
--- 2. OTP Verification table
-CREATE TABLE IF NOT EXISTS otp_verification (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  phone VARCHAR(15) NOT NULL,
-  otp_hash VARCHAR(255) NOT NULL,
-  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  attempt_count INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_verification(phone);
 
 -- 3. Candidate Profile table
 CREATE TABLE IF NOT EXISTS candidate_profiles (
@@ -193,22 +191,6 @@ CREATE TABLE IF NOT EXISTS translation_cache (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   PRIMARY KEY (source_hash, target_lang)
 );
-
--- Admin status enum and columns (idempotent)
-DO $$ BEGIN
-  CREATE TYPE admin_status AS ENUM ('pending', 'approved', 'rejected');
-EXCEPTION WHEN duplicate_object THEN null;
-END $$;
-
-DO $$ BEGIN
-  ALTER TABLE users ADD COLUMN name VARCHAR(255);
-EXCEPTION WHEN duplicate_column THEN null;
-END $$;
-
-DO $$ BEGIN
-  ALTER TABLE users ADD COLUMN admin_status admin_status;
-EXCEPTION WHEN duplicate_column THEN null;
-END $$;
 
 -- Updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()

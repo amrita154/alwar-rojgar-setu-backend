@@ -1,14 +1,16 @@
 import { Router } from 'express';
-import { requestOtp, verifyOtp, refreshToken, logout, requestAdminAccess } from '../controllers/auth';
-import { authenticate, AuthRequest } from '../middleware/auth';
-import { otpIpLimiter, otpPhoneLimiter } from '../middleware/rateLimiter';
+import passport from 'passport';
+import { register, login, googleCallback, refreshToken, logout } from '../controllers/auth';
+import { authenticate } from '../middleware/auth';
+import { loginLimiter, registerLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
-router.post('/otp/request', otpIpLimiter, otpPhoneLimiter, requestOtp);
-router.post('/otp/verify', verifyOtp);
+router.post('/register', registerLimiter, register);
+router.post('/login', loginLimiter, login);
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+router.get('/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), googleCallback);
 router.post('/token/refresh', refreshToken);
 router.post('/logout', authenticate, logout);
-router.post('/admin/request', requestAdminAccess);
 
 export default router;

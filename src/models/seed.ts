@@ -1,21 +1,27 @@
 import { pool } from '../config/database';
+import bcrypt from 'bcrypt';
 
 async function seed() {
   console.log('Seeding database...');
   try {
+    // Demo passwords (will be bcrypt hashed)
+    const adminPasswordHash = await bcrypt.hash('Admin@123', 12);
+    const employerPasswordHash = await bcrypt.hash('Employer@123', 12);
+    const candidatePasswordHash = await bcrypt.hash('Candidate@123', 12);
+
     // Admin
     await pool.query(`
-      INSERT INTO users (id, phone, role, is_active)
-      VALUES ('00000000-0000-0000-0000-000000000001', '+919999999999', 'admin', true)
-      ON CONFLICT (phone) DO NOTHING
-    `);
+      INSERT INTO users (id, email, password_hash, role, is_active, name, admin_status)
+      VALUES ('00000000-0000-0000-0000-000000000001', 'admin@alwar-rojgar.gov.in', $1, 'admin', true, 'Admin User', 'approved')
+      ON CONFLICT (email) DO NOTHING
+    `, [adminPasswordHash]);
 
-    // Demo Employer (+911111111111, OTP always 123456)
+    // Demo Employer
     await pool.query(`
-      INSERT INTO users (id, phone, role, is_active)
-      VALUES ('00000000-0000-0000-0000-000000000002', '+911111111111', 'employer', true)
-      ON CONFLICT (phone) DO NOTHING
-    `);
+      INSERT INTO users (id, email, password_hash, role, is_active, name)
+      VALUES ('00000000-0000-0000-0000-000000000002', 'demo.employer@example.com', $1, 'employer', true, 'Demo Employer')
+      ON CONFLICT (email) DO NOTHING
+    `, [employerPasswordHash]);
     await pool.query(`
       INSERT INTO employer_profiles (id, user_id, company_name, gst_number, status)
       VALUES (
@@ -39,12 +45,12 @@ async function seed() {
       ON CONFLICT DO NOTHING
     `);
 
-    // Demo Job Seeker (+912222222222, OTP always 123456)
+    // Demo Candidate
     await pool.query(`
-      INSERT INTO users (id, phone, role, is_active)
-      VALUES ('00000000-0000-0000-0000-000000000003', '+912222222222', 'candidate', true)
-      ON CONFLICT (phone) DO NOTHING
-    `);
+      INSERT INTO users (id, email, password_hash, role, is_active, name)
+      VALUES ('00000000-0000-0000-0000-000000000003', 'demo.candidate@example.com', $1, 'candidate', true, 'Demo Candidate')
+      ON CONFLICT (email) DO NOTHING
+    `, [candidatePasswordHash]);
     await pool.query(`
       INSERT INTO candidate_profiles (
         id, user_id, full_name, email,
@@ -67,9 +73,9 @@ async function seed() {
     console.log('');
     console.log('Seed complete.');
     console.log('──────────────────────────────────────────');
-    console.log('Admin         +919999999999  OTP: any (random)');
-    console.log('Demo Employer +911111111111  OTP: 123456');
-    console.log('Demo Seeker   +912222222222  OTP: 123456');
+    console.log('Admin          admin@alwar-rojgar.gov.in  Pass: Admin@123');
+    console.log('Demo Employer  demo.employer@example.com  Pass: Employer@123');
+    console.log('Demo Candidate demo.candidate@example.com Pass: Candidate@123');
     console.log('──────────────────────────────────────────');
   } catch (err) {
     console.error('Seed failed:', err);

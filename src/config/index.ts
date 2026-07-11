@@ -21,10 +21,14 @@ export const config = {
     refreshExpiry: process.env.JWT_REFRESH_EXPIRY || '30d',
   },
 
-  otp: {
-    expiryMinutes: parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10),
-    maxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS || '5', 10),
-    smsProvider: process.env.SMS_PROVIDER || 'console',
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:4000/api/v1/auth/google/callback',
+  },
+
+  frontend: {
+    url: process.env.FRONTEND_URL || 'http://localhost:5173',
   },
 
   upload: {
@@ -37,11 +41,7 @@ export const config = {
   },
 
   admin: {
-    phoneAllowlist: (process.env.ADMIN_PHONE_ALLOWLIST || '')
-      .split(',')
-      .map((p) => p.trim())
-      .filter(Boolean),
-    registrationCode: process.env.ADMIN_REGISTRATION_CODE || '',
+    inviteCode: process.env.ADMIN_INVITE_CODE || '',
   },
 
   translation: {

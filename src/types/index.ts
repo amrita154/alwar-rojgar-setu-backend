@@ -32,6 +32,8 @@ export interface CandidateProfile {
   user_id: string;
   full_name: string;
   email: string | null;
+  phone: string | null;
+  description: string | null;
   highest_education: string | null;
   iti_trade: string | null;
   iti_college: string | null;
@@ -61,6 +63,10 @@ export interface EmployerProfileRow {
   company_name: string;
   logo_url: string | null;
   description: string | null;
+  contact_person_name: string | null;
+  contact_person_phone: string | null;
+  contact_person_email: string | null;
+  contact_person_designation: string | null;
   gst_number: string | null;
   udyam_number: string | null;
   status: EmployerStatus;
@@ -88,7 +94,7 @@ export interface JobRow {
   title: string;
   description: string;
   gross_salary: number;
-  net_salary: number;
+  net_salary: number | null;
   job_type: JobType;
   openings: number;
   filled_count: number;

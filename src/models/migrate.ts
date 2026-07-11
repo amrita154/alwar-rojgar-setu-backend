@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS candidate_profiles (
   user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   full_name VARCHAR(255) NOT NULL,
   email VARCHAR(255),
+  phone VARCHAR(15),
+  description TEXT,
   highest_education VARCHAR(100),
   iti_trade VARCHAR(100),
   iti_college VARCHAR(255),
@@ -106,6 +108,10 @@ CREATE TABLE IF NOT EXISTS employer_profiles (
   company_name VARCHAR(255) NOT NULL,
   logo_url VARCHAR(500),
   description TEXT,
+  contact_person_name VARCHAR(255),
+  contact_person_phone VARCHAR(15),
+  contact_person_email VARCHAR(255),
+  contact_person_designation VARCHAR(255),
   gst_number VARCHAR(50),
   udyam_number VARCHAR(50),
   status employer_status NOT NULL DEFAULT 'pending',
@@ -125,6 +131,44 @@ END $$;
 DO $$ BEGIN
   ALTER TABLE employer_profiles ADD COLUMN description TEXT;
 EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+-- Contact person columns (idempotent, for existing databases)
+DO $$ BEGIN
+  ALTER TABLE employer_profiles ADD COLUMN contact_person_name VARCHAR(255);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE employer_profiles ADD COLUMN contact_person_phone VARCHAR(15);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE employer_profiles ADD COLUMN contact_person_email VARCHAR(255);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE employer_profiles ADD COLUMN contact_person_designation VARCHAR(255);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+-- Candidate contact + about columns (idempotent, for existing databases)
+DO $$ BEGIN
+  ALTER TABLE candidate_profiles ADD COLUMN phone VARCHAR(15);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE candidate_profiles ADD COLUMN description TEXT;
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+-- Net (take-home) salary is no longer collected; allow NULL on existing rows.
+DO $$ BEGIN
+  ALTER TABLE jobs ALTER COLUMN net_salary DROP NOT NULL;
+EXCEPTION WHEN others THEN null;
 END $$;
 
 -- 5. Employer Documents table
@@ -148,7 +192,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   title VARCHAR(255) NOT NULL,
   description TEXT NOT NULL,
   gross_salary INTEGER NOT NULL,
-  net_salary INTEGER NOT NULL,
+  net_salary INTEGER,
   job_type job_type NOT NULL,
   openings INTEGER NOT NULL DEFAULT 1,
   filled_count INTEGER NOT NULL DEFAULT 0,
@@ -209,6 +253,10 @@ DO $$ BEGIN
   ALTER TABLE users ADD COLUMN admin_status admin_status;
 EXCEPTION WHEN duplicate_column THEN null;
 END $$;
+
+-- Backfill: existing admin users created before admin_status existed default to 'approved'
+-- (prevents a null status from breaking the Admin Users tab).
+UPDATE users SET admin_status = 'approved' WHERE role = 'admin' AND admin_status IS NULL;
 
 -- Updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()

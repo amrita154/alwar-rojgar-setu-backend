@@ -4,6 +4,7 @@ import {
   searchJobs,
   getJob,
   getOwnedJobs,
+  getRecommendedJobs,
   createJob,
   updateJob,
   closeJob,
@@ -16,6 +17,8 @@ const router = Router();
 // Public routes
 router.get('/', searchJobs);
 router.get('/owned', authenticate, requireRole('employer'), getOwnedJobs);
+// Candidate-only: personalised recommendations by skill overlap.
+router.get('/recommended', authenticate, requireRole('candidate'), getRecommendedJobs);
 router.get('/:jobId', getJob);
 
 // Employer routes

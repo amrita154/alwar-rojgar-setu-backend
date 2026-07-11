@@ -4,11 +4,21 @@ import { parsePagination, paginatedResponse } from '../utils';
 import * as jobsService from '../services/jobs';
 import * as employerService from '../services/employer';
 
+export async function getRecommendedJobs(req: AuthRequest, res: Response): Promise<void> {
+  const userId = req.user!.userId;
+  const limitRaw = parseInt(String(req.query.limit ?? ''), 10);
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 20) : 8;
+
+  const data = await jobsService.getRecommended(userId, limit);
+  res.json(paginatedResponse(data, data.length, 1, data.length));
+}
+
 export async function searchJobs(req: Request, res: Response): Promise<void> {
-  const { district, tradeRequired, jobType, minSalary, maxSalary } = req.query;
+  const { q, district, tradeRequired, jobType, minSalary, maxSalary } = req.query;
   const { page, limit, offset } = parsePagination(req.query as { page?: string; limit?: string });
 
   const { data, total } = await jobsService.search({
+    q: typeof q === 'string' && q.trim() ? q.trim() : undefined,
     district: district as string | undefined,
     tradeRequired: tradeRequired as string | undefined,
     jobType: jobType as string | undefined,
@@ -55,9 +65,9 @@ export async function createJob(req: AuthRequest, res: Response): Promise<void> 
     return;
   }
 
-  const { title, description, grossSalary, netSalary, jobType, district } = req.body;
-  if (!title || !description || !grossSalary || !netSalary || !jobType || !district) {
-    res.status(400).json({ message: 'Missing required fields: title, description, grossSalary, netSalary, jobType, district' });
+  const { title, description, grossSalary, jobType, district } = req.body;
+  if (!title || !description || !grossSalary || !jobType || !district) {
+    res.status(400).json({ message: 'Missing required fields: title, description, grossSalary, jobType, district' });
     return;
   }
 

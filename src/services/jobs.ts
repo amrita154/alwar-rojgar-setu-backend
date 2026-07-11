@@ -2,6 +2,7 @@ import { pool } from '../config/database';
 import { toCamelCase } from '../utils';
 
 export async function search(filters: {
+  q?: string;
   district?: string;
   tradeRequired?: string;
   jobType?: string;
@@ -13,6 +14,14 @@ export async function search(filters: {
   let where = "WHERE j.status = 'active'";
   const params: unknown[] = [];
 
+  if (filters.q) {
+    // Free-text keyword search across title, skill/trade, company and description.
+    // Parameterized + ILIKE (escape LIKE wildcards) to stay injection-safe.
+    const term = `%${filters.q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
+    params.push(term);
+    const idx = params.length;
+    where += ` AND (j.title ILIKE $${idx} OR j.trade_required ILIKE $${idx} OR j.description ILIKE $${idx} OR ep.company_name ILIKE $${idx})`;
+  }
   if (filters.district) {
     params.push(filters.district);
     where += ` AND j.district = $${params.length}`;
@@ -34,7 +43,10 @@ export async function search(filters: {
     where += ` AND j.net_salary <= $${params.length}`;
   }
 
-  const countResult = await pool.query(`SELECT COUNT(*) FROM jobs j ${where}`, params);
+  const countResult = await pool.query(
+    `SELECT COUNT(*) FROM jobs j LEFT JOIN employer_profiles ep ON ep.id = j.employer_id ${where}`,
+    params
+  );
   const total = parseInt(countResult.rows[0].count, 10);
 
   params.push(filters.limit, filters.offset);
@@ -49,6 +61,93 @@ export async function search(filters: {
   );
 
   return { data: result.rows.map(toCamelCase), total };
+}
+
+/**
+ * Score a single active job against a candidate profile row by overlapping
+ * skills. Higher score = better match. Signals:
+ *  - each candidate skill / ITI trade that appears in the job's title,
+ *    description or required trade → +1
+ *  - candidate's ITI trade exactly equals the job's required trade → +3
+ *  - job is in the candidate's district (only when there is already an overlap)
+ *    → +1 (convenience boost, never the sole reason to recommend)
+ */
+function scoreJobForCandidate(
+  profile: { skills?: unknown; iti_trade?: string | null; district?: string | null },
+  job: { title?: string | null; description?: string | null; trade_required?: string | null; district?: string | null }
+): { matchScore: number; matchedSkills: string[] } {
+  const terms: string[] = [];
+  if (Array.isArray(profile.skills)) terms.push(...(profile.skills as string[]));
+  if (profile.iti_trade) terms.push(profile.iti_trade);
+
+  const haystack = [job.title, job.description, job.trade_required]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  const matchedSkills: string[] = [];
+  let matchScore = 0;
+
+  for (const raw of terms) {
+    const term = String(raw).trim();
+    if (!term) continue;
+    if (haystack.includes(term.toLowerCase())) {
+      if (!matchedSkills.includes(term)) matchedSkills.push(term);
+      matchScore += 1;
+    }
+  }
+
+  if (
+    profile.iti_trade &&
+    job.trade_required &&
+    String(profile.iti_trade).toLowerCase() === String(job.trade_required).toLowerCase()
+  ) {
+    matchScore += 3;
+  }
+
+  if (
+    matchScore > 0 &&
+    profile.district &&
+    job.district &&
+    String(profile.district).toLowerCase() === String(job.district).toLowerCase()
+  ) {
+    matchScore += 1;
+  }
+
+  return { matchScore, matchedSkills };
+}
+
+/**
+ * Recommend active jobs for a candidate, ranked by skill overlap.
+ * Returns only jobs with at least one matching skill/trade.
+ */
+export async function getRecommended(userId: string, limit = 8) {
+  const profileResult = await pool.query(
+    'SELECT skills, iti_trade, district FROM candidate_profiles WHERE user_id = $1',
+    [userId]
+  );
+  if (profileResult.rows.length === 0) return [];
+  const profile = profileResult.rows[0];
+
+  const hasSignals =
+    (Array.isArray(profile.skills) && profile.skills.length > 0) || Boolean(profile.iti_trade);
+  if (!hasSignals) return [];
+
+  const jobsResult = await pool.query(
+    `SELECT j.*, ep.company_name, ep.logo_url as company_logo_url, ep.description as company_description
+     FROM jobs j
+     LEFT JOIN employer_profiles ep ON ep.id = j.employer_id
+     WHERE j.status = 'active'
+     ORDER BY j.posted_at DESC
+     LIMIT 200`
+  );
+
+  return jobsResult.rows
+    .map((row) => ({ row, ...scoreJobForCandidate(profile, row) }))
+    .filter((r) => r.matchScore > 0)
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, limit)
+    .map((r) => ({ ...toCamelCase(r.row), matchScore: r.matchScore, matchedSkills: r.matchedSkills }));
 }
 
 export async function getById(jobId: string) {
@@ -80,7 +179,7 @@ export async function create(employerId: string, data: Record<string, unknown>) 
   const result = await pool.query(
     `INSERT INTO jobs (employer_id, title, description, gross_salary, net_salary, job_type, openings, trade_required, district)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-    [employerId, title, description, grossSalary, netSalary, jobType, openings || 1, tradeRequired || null, district]
+    [employerId, title, description, grossSalary, netSalary ?? null, jobType, openings || 1, tradeRequired || null, district]
   );
 
   return toCamelCase(result.rows[0]);

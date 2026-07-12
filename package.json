@@ -12,8 +12,10 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
+    "@types/connect-pg-simple": "^7.0.3",
     "@vercel/blob": "^2.5.0",
     "bcrypt": "^5.1.1",
+    "connect-pg-simple": "^10.0.0",
     "connect-sqlite3": "^0.9.13",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",

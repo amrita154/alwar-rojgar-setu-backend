@@ -4,7 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import session from 'express-session';
-import SQLiteStore from 'connect-sqlite3';
+import connectPgSimple from 'connect-pg-simple';
 import passport from 'passport';
 import { config } from './config';
 import { errorHandler, notFound } from './middleware/errorHandler';
@@ -23,7 +23,7 @@ import documentRoutes from './routes/documents';
 import translateRoutes from './routes/translate';
 
 const app = express();
-const SessionStore = SQLiteStore(session);
+const PgStore = connectPgSimple(session);
 
 app.set('trust proxy', 1);
 app.use(helmet());
@@ -41,7 +41,7 @@ app.use(cookieParser());
 
 // Session middleware for Passport OAuth flow
 app.use(session({
-  store: new SessionStore({ db: 'sessions.db', dir: './sessions' }),
+  store: new PgStore({ conString: process.env.DATABASE_URL, createTableIfMissing: true }),
   secret: config.jwt.secret,
   resave: false,
   saveUninitialized: false,

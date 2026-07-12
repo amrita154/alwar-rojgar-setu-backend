@@ -9,21 +9,30 @@ export type CertificateType = 'ITI_CERTIFICATE' | 'DIPLOMA_CERTIFICATE' | 'DEGRE
 
 export interface User {
   id: string;
-  phone: string;
+  email: string;
+  password_hash: string | null;
+  google_id: string | null;
   role: Role;
   is_active: boolean;
+  email_verified: boolean;
+  name: string | null;
+  admin_status: 'pending' | 'approved' | 'rejected' | null;
   refresh_token: string | null;
   refresh_token_expiry: Date | null;
   created_at: Date;
   updated_at: Date;
 }
 
-export interface OtpVerification {
+export interface EmailOtp {
   id: string;
-  phone: string;
-  otp_hash: string;
+  email: string;
+  otp_code_hash: string;
+  password_hash: string;
+  role: Role;
+  admin_invite_code: string | null;
   expires_at: Date;
-  attempt_count: number;
+  used_at: Date | null;
+  attempts: number;
   created_at: Date;
 }
 
@@ -43,6 +52,8 @@ export interface CandidateProfile {
   city: string | null;
   district: string | null;
   pincode: string | null;
+  phone: string | null;
+  description: string | null;
   photo_url: string | null;
   resume_url: string | null;
   aadhaar_url: string | null;
@@ -63,6 +74,10 @@ export interface EmployerProfileRow {
   description: string | null;
   gst_number: string | null;
   udyam_number: string | null;
+  contact_person_name: string | null;
+  contact_person_phone: string | null;
+  contact_person_email: string | null;
+  contact_person_designation: string | null;
   status: EmployerStatus;
   verified_by: string | null;
   verified_at: Date | null;

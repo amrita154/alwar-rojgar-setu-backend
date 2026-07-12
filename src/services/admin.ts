@@ -155,7 +155,7 @@ export async function listAdmins(filters: { status?: string; search?: string; li
   }
   if (filters.search) {
     params.push(`%${filters.search}%`);
-    where += ` AND (u.name ILIKE $${params.length} OR u.phone ILIKE $${params.length})`;
+    where += ` AND (u.name ILIKE $${params.length} OR u.email ILIKE $${params.length})`;
   }
 
   const countResult = await pool.query(`SELECT COUNT(*) FROM users u ${where}`, params);
@@ -163,7 +163,7 @@ export async function listAdmins(filters: { status?: string; search?: string; li
 
   params.push(filters.limit, filters.offset);
   const result = await pool.query(
-    `SELECT id AS user_id, name, phone, admin_status, is_active, created_at
+    `SELECT id AS user_id, name, email, admin_status, is_active, created_at
      FROM users u ${where}
      ORDER BY created_at DESC
      LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -177,26 +177,9 @@ export async function setAdminStatus(userId: string, status: 'approved' | 'rejec
   const isActive = status === 'approved';
   const result = await pool.query(
     `UPDATE users SET admin_status = $1, is_active = $2
-     WHERE id = $3 AND role = 'admin' RETURNING id AS user_id, name, phone, admin_status, is_active, created_at`,
+     WHERE id = $3 AND role = 'admin' RETURNING id AS user_id, name, email, admin_status, is_active, created_at`,
     [status, isActive, userId]
   );
   return result.rows.length > 0 ? toCamelCase(result.rows[0]) : null;
 }
 
-const E164_IN = /^\+91[6-9]\d{9}$/;
-
-export async function createAdminRequest(name: string, phone: string): Promise<Record<string, unknown>> {
-  if (!E164_IN.test(phone)) {
-    throw Object.assign(new Error('Invalid phone number. Must be a valid 10-digit Indian mobile number.'), { statusCode: 400 });
-  }
-  const existing = await pool.query('SELECT id, admin_status FROM users WHERE phone = $1', [phone]);
-  if (existing.rows.length > 0) {
-    throw Object.assign(new Error('Phone already registered'), { statusCode: 409 });
-  }
-  const result = await pool.query(
-    `INSERT INTO users (phone, role, name, admin_status, is_active)
-     VALUES ($1, 'admin', $2, 'pending', false) RETURNING id AS user_id, name, phone, admin_status, is_active, created_at`,
-    [phone, name]
-  );
-  return toCamelCase(result.rows[0]);
-}

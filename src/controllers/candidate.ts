@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { parsePagination, paginatedResponse } from '../utils';
 import { uploadFile } from '../utils/storage';
 import * as candidateService from '../services/candidate';
+import { pool } from '../config/database';
 
 export async function createCandidateProfile(req: AuthRequest, res: Response): Promise<void> {
   const userId = req.user!.userId;
@@ -18,7 +19,10 @@ export async function createCandidateProfile(req: AuthRequest, res: Response): P
     return;
   }
 
-  const profile = await candidateService.createProfile(userId, req.body);
+  const userRow = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
+  const userEmail: string = userRow.rows[0]?.email;
+
+  const profile = await candidateService.createProfile(userId, { ...req.body, email: userEmail });
   res.status(201).json(profile);
 }
 

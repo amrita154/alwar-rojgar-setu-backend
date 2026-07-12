@@ -9,18 +9,28 @@ async function seed() {
     const employerPasswordHash = await bcrypt.hash('Employer@123', 12);
     const candidatePasswordHash = await bcrypt.hash('Candidate@123', 12);
 
-    // Admin
+    // Super Admin — update email if old seed record exists, then upsert with new email
     await pool.query(`
-      INSERT INTO users (id, email, password_hash, role, is_active, name, admin_status)
-      VALUES ('00000000-0000-0000-0000-000000000001', 'admin@alwar-rojgar.gov.in', $1, 'admin', true, 'Admin User', 'approved')
-      ON CONFLICT (email) DO NOTHING
+      UPDATE users SET email = 'alwarrojarsetu@gmail.com'
+      WHERE id = '00000000-0000-0000-0000-000000000001'
+        AND email = 'admin@alwar-rojgar.gov.in'
+    `);
+    await pool.query(`
+      INSERT INTO users (id, email, password_hash, role, is_active, email_verified, name, admin_status)
+      VALUES ('00000000-0000-0000-0000-000000000001', 'alwarrojarsetu@gmail.com', $1, 'admin', true, true, 'Alwar Rojgar Setu Admin', 'approved')
+      ON CONFLICT (id) DO UPDATE SET
+        email          = EXCLUDED.email,
+        password_hash  = EXCLUDED.password_hash,
+        email_verified = true,
+        admin_status   = 'approved',
+        updated_at     = NOW()
     `, [adminPasswordHash]);
 
     // Demo Employer
     await pool.query(`
-      INSERT INTO users (id, email, password_hash, role, is_active, name)
-      VALUES ('00000000-0000-0000-0000-000000000002', 'demo.employer@example.com', $1, 'employer', true, 'Demo Employer')
-      ON CONFLICT (email) DO NOTHING
+      INSERT INTO users (id, email, password_hash, role, is_active, email_verified, name)
+      VALUES ('00000000-0000-0000-0000-000000000002', 'demo.employer@example.com', $1, 'employer', true, true, 'Demo Employer')
+      ON CONFLICT (id) DO UPDATE SET email_verified = true
     `, [employerPasswordHash]);
     await pool.query(`
       INSERT INTO employer_profiles (id, user_id, company_name, gst_number, status)
@@ -47,9 +57,9 @@ async function seed() {
 
     // Demo Candidate
     await pool.query(`
-      INSERT INTO users (id, email, password_hash, role, is_active, name)
-      VALUES ('00000000-0000-0000-0000-000000000003', 'demo.candidate@example.com', $1, 'candidate', true, 'Demo Candidate')
-      ON CONFLICT (email) DO NOTHING
+      INSERT INTO users (id, email, password_hash, role, is_active, email_verified, name)
+      VALUES ('00000000-0000-0000-0000-000000000003', 'demo.candidate@example.com', $1, 'candidate', true, true, 'Demo Candidate')
+      ON CONFLICT (id) DO UPDATE SET email_verified = true
     `, [candidatePasswordHash]);
     await pool.query(`
       INSERT INTO candidate_profiles (
@@ -73,7 +83,7 @@ async function seed() {
     console.log('');
     console.log('Seed complete.');
     console.log('──────────────────────────────────────────');
-    console.log('Admin          admin@alwar-rojgar.gov.in  Pass: Admin@123');
+    console.log('Admin          alwarrojarsetu@gmail.com   Pass: Admin@123');
     console.log('Demo Employer  demo.employer@example.com  Pass: Employer@123');
     console.log('Demo Candidate demo.candidate@example.com Pass: Candidate@123');
     console.log('──────────────────────────────────────────');

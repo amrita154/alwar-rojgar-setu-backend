@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS users (
   google_id VARCHAR(255) UNIQUE,
   role user_role NOT NULL,
   is_active BOOLEAN NOT NULL DEFAULT true,
+  email_verified BOOLEAN NOT NULL DEFAULT false,
   refresh_token TEXT,
   refresh_token_expiry TIMESTAMP WITH TIME ZONE,
   name VARCHAR(255),
@@ -67,6 +68,50 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
+
+-- Add email_verified to existing databases
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT false;
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+-- Mark existing Google-authenticated users as verified (Google already verified their email)
+UPDATE users SET email_verified = true WHERE google_id IS NOT NULL AND email_verified = false;
+
+-- 2. Email OTPs table (registration + password-reset flows)
+CREATE TABLE IF NOT EXISTS email_otps (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email VARCHAR(255) NOT NULL,
+  otp_code_hash VARCHAR(64) NOT NULL,
+  password_hash VARCHAR(255),
+  role user_role,
+  admin_invite_code VARCHAR(255),
+  purpose VARCHAR(20) NOT NULL DEFAULT 'registration',
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  used_at TIMESTAMP WITH TIME ZONE,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_otps_email ON email_otps(email);
+
+-- Add purpose column to distinguish registration vs password-reset OTPs
+DO $$ BEGIN
+  ALTER TABLE email_otps ADD COLUMN purpose VARCHAR(20) NOT NULL DEFAULT 'registration';
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+-- Make role nullable — password-reset OTPs don't need a role
+DO $$ BEGIN
+  ALTER TABLE email_otps ALTER COLUMN role DROP NOT NULL;
+EXCEPTION WHEN others THEN null;
+END $$;
+
+-- Make password_hash nullable — password-reset OTPs don't pre-store a hash
+DO $$ BEGIN
+  ALTER TABLE email_otps ALTER COLUMN password_hash DROP NOT NULL;
+EXCEPTION WHEN others THEN null;
+END $$;
 
 -- 3. Candidate Profile table
 CREATE TABLE IF NOT EXISTS candidate_profiles (
@@ -92,6 +137,8 @@ CREATE TABLE IF NOT EXISTS candidate_profiles (
   diploma_certificate_url VARCHAR(500),
   degree_certificate_url VARCHAR(500),
   experience_letter_url VARCHAR(500),
+  phone VARCHAR(20),
+  description TEXT,
   aadhaar_verified BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
@@ -106,6 +153,10 @@ CREATE TABLE IF NOT EXISTS employer_profiles (
   description TEXT,
   gst_number VARCHAR(50),
   udyam_number VARCHAR(50),
+  contact_person_name VARCHAR(255),
+  contact_person_phone VARCHAR(20),
+  contact_person_email VARCHAR(255),
+  contact_person_designation VARCHAR(100),
   status employer_status NOT NULL DEFAULT 'pending',
   verified_by UUID REFERENCES users(id),
   verified_at TIMESTAMP WITH TIME ZONE,
@@ -122,6 +173,34 @@ END $$;
 
 DO $$ BEGIN
   ALTER TABLE employer_profiles ADD COLUMN description TEXT;
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+-- Employer contact person fields (for existing databases)
+DO $$ BEGIN
+  ALTER TABLE employer_profiles ADD COLUMN contact_person_name VARCHAR(255);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE employer_profiles ADD COLUMN contact_person_phone VARCHAR(20);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE employer_profiles ADD COLUMN contact_person_email VARCHAR(255);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE employer_profiles ADD COLUMN contact_person_designation VARCHAR(100);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+-- Candidate phone + description (for existing databases)
+DO $$ BEGIN
+  ALTER TABLE candidate_profiles ADD COLUMN phone VARCHAR(20);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE candidate_profiles ADD COLUMN description TEXT;
 EXCEPTION WHEN duplicate_column THEN null;
 END $$;
 

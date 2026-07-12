@@ -21,8 +21,16 @@ export async function searchJobs(req: Request, res: Response): Promise<void> {
   res.json(paginatedResponse(data, total, page, limit));
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getJob(req: Request, res: Response): Promise<void> {
   const { jobId } = req.params;
+
+  if (!UUID_REGEX.test(jobId)) {
+    res.status(404).json({ message: 'Job not found' });
+    return;
+  }
+
   const job = await jobsService.getById(jobId);
 
   if (!job) {
@@ -69,6 +77,11 @@ export async function updateJob(req: AuthRequest, res: Response): Promise<void> 
   const userId = req.user!.userId;
   const { jobId } = req.params;
 
+  if (!UUID_REGEX.test(jobId)) {
+    res.status(404).json({ message: 'Job not found' });
+    return;
+  }
+
   const employerId = await employerService.getProfileId(userId);
   if (!employerId) {
     res.status(403).json({ message: 'Not authorized' });
@@ -87,6 +100,11 @@ export async function updateJob(req: AuthRequest, res: Response): Promise<void> 
 export async function closeJob(req: AuthRequest, res: Response): Promise<void> {
   const userId = req.user!.userId;
   const { jobId } = req.params;
+
+  if (!UUID_REGEX.test(jobId)) {
+    res.status(404).json({ message: 'Job not found' });
+    return;
+  }
 
   const employerId = await employerService.getProfileId(userId);
   if (!employerId) {
@@ -107,6 +125,11 @@ export async function reopenJob(req: AuthRequest, res: Response): Promise<void> 
   const userId = req.user!.userId;
   const { jobId } = req.params;
 
+  if (!UUID_REGEX.test(jobId)) {
+    res.status(404).json({ message: 'Job not found' });
+    return;
+  }
+
   const employerId = await employerService.getProfileId(userId);
   if (!employerId) {
     res.status(403).json({ message: 'Not authorized' });
@@ -125,6 +148,11 @@ export async function reopenJob(req: AuthRequest, res: Response): Promise<void> 
 export async function getJobApplicants(req: AuthRequest, res: Response): Promise<void> {
   const { jobId } = req.params;
   const userId = req.user!.userId;
+
+  if (!UUID_REGEX.test(jobId)) {
+    res.status(404).json({ message: 'Job not found' });
+    return;
+  }
   const role = req.user!.role;
 
   if (role === 'employer') {

@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { toCamelCase } from '../utils';
 import { uploadFile } from '../utils/storage';
 import * as employerService from '../services/employer';
+import { pool } from '../config/database';
 
 export async function createEmployerProfile(req: AuthRequest, res: Response): Promise<void> {
   const userId = req.user!.userId;
@@ -18,7 +19,10 @@ export async function createEmployerProfile(req: AuthRequest, res: Response): Pr
     return;
   }
 
-  const profile = await employerService.createProfile(userId, req.body);
+  const userRow = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
+  const userEmail: string = userRow.rows[0]?.email;
+
+  const profile = await employerService.createProfile(userId, { ...req.body, contactPersonEmail: userEmail });
   res.status(201).json(profile);
 }
 

@@ -18,13 +18,24 @@ export const globalLimiter = rateLimit({
   message: { message: 'Too many requests. Try again later.' },
 });
 
-export const loginLimiter = rateLimit({
+// Per-IP: stops one machine brute-forcing across many accounts (generous to handle shared NAT).
+export const loginIpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Too many login attempts. Try again in 15 minutes.' },
+  message: { message: 'Too many requests from your network. Try again in 15 minutes.' },
   keyGenerator: getClientIp,
+});
+
+// Per-email: stops credential stuffing against one account regardless of attacker IP count.
+export const loginEmailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many login attempts for this account. Try again in 15 minutes.' },
+  keyGenerator: (req: Request) => `email:${(req.body?.email as string | undefined)?.toLowerCase() ?? 'unknown'}`,
   skip: (req: Request) => !req.body?.email,
 });
 
@@ -36,6 +47,15 @@ export const registerLimiter = rateLimit({
   message: { message: 'Too many registration attempts. Try again later.' },
   keyGenerator: getClientIp,
   skip: (req: Request) => !req.body?.email,
+});
+
+export const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many verification attempts. Try again in 15 minutes.' },
+  keyGenerator: getClientIp,
 });
 
 export const translationLimiter = rateLimit({

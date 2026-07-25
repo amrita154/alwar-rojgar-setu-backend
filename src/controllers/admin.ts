@@ -54,12 +54,12 @@ export async function verifyEmployer(req: AuthRequest, res: Response): Promise<v
 }
 
 export async function getAdminCandidates(req: AuthRequest, res: Response): Promise<void> {
-  const { search, department } = req.query;
+  const { search, trade } = req.query;
   const { page, limit, offset } = parsePagination(req.query as { page?: string; limit?: string });
 
   const { data, total } = await adminService.listCandidates({
     search: search as string | undefined,
-    department: department as string | undefined,
+    trade: trade as string | undefined,
     limit,
     offset,
   });
@@ -104,11 +104,10 @@ export async function enableUser(req: AuthRequest, res: Response): Promise<void>
 }
 
 export async function getAdmins(req: AuthRequest, res: Response): Promise<void> {
-  const { status, search } = req.query;
+  const { search } = req.query;
   const { page, limit, offset } = parsePagination(req.query as { page?: string; limit?: string });
 
   const { data, total } = await adminService.listAdmins({
-    status: status as string | undefined,
     search: search as string | undefined,
     limit,
     offset,
@@ -117,26 +116,44 @@ export async function getAdmins(req: AuthRequest, res: Response): Promise<void> 
   res.json(paginatedResponse(data, total, page, limit));
 }
 
-export async function approveAdmin(req: AuthRequest, res: Response): Promise<void> {
-  const { userId } = req.params;
-  const updated = await adminService.setAdminStatus(userId, 'approved');
+/**
+ * POST /admin/admins/grant
+ *
+ * The only way admin access is granted now — an existing admin enters an
+ * email. If that email already has an account it's promoted immediately;
+ * otherwise it's stored as a pending invite and consumed automatically the
+ * moment that email signs up (see authService.checkAdminGrant).
+ */
+export async function grantAdminAccess(req: AuthRequest, res: Response): Promise<void> {
+  const { email } = req.body;
 
-  if (!updated) {
-    res.status(404).json({ message: 'Admin user not found' });
+  if (!email || typeof email !== 'string') {
+    res.status(400).json({ message: 'Email is required' });
     return;
   }
 
-  res.json(updated);
+  try {
+    const result = await adminService.grantAdminAccess(email, req.user!.userId);
+    res.status(201).json(result);
+  } catch (err) {
+    const statusCode = (err as { statusCode?: number }).statusCode ?? 500;
+    res.status(statusCode).json({ message: (err as Error).message });
+  }
 }
 
-export async function rejectAdmin(req: AuthRequest, res: Response): Promise<void> {
-  const { userId } = req.params;
-  const updated = await adminService.setAdminStatus(userId, 'rejected');
+export async function getAdminInvites(_req: AuthRequest, res: Response): Promise<void> {
+  const invites = await adminService.listAdminInvites();
+  res.json({ data: invites });
+}
 
-  if (!updated) {
-    res.status(404).json({ message: 'Admin user not found' });
+export async function cancelAdminInvite(req: AuthRequest, res: Response): Promise<void> {
+  const { inviteId } = req.params;
+  const success = await adminService.cancelAdminInvite(inviteId);
+
+  if (!success) {
+    res.status(404).json({ message: 'Invite not found' });
     return;
   }
 
-  res.json(updated);
+  res.json({ message: 'Invite cancelled' });
 }

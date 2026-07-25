@@ -5,6 +5,7 @@ import {
   verifyOtpAndRegister,
   login,
   googleCallback,
+  completeGoogleSignup,
   refreshToken,
   logout,
   forgotPassword,
@@ -55,6 +56,8 @@ router.get('/google/callback', (req: Request, res: Response, next: NextFunction)
     }
   )(req, res, next);
 }, googleCallback);
+
+router.post('/google/complete', registerLimiter, completeGoogleSignup);
 
 router.post('/forgot-password', loginIpLimiter, loginEmailLimiter, forgotPassword);
 router.post('/reset-password', otpLimiter, resetPassword);

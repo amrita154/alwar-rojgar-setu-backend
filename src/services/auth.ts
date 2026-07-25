@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../config/database';
 import { config } from '../config';
 import { Role, JwtPayload } from '../types';
+import { checkAdminGrant, consumeAdminInvite } from './admin';
 
 /**
  * Thrown when a user tries to register with an email that is already taken,
@@ -32,6 +33,11 @@ export interface AuthValidationResult {
 /**
  * Create a verified user account after successful OTP verification.
  * Throws AuthMethodConflictError if the email is already registered.
+ *
+ * `role` here is only ever 'candidate' or 'employer' (admin is no longer a
+ * self-serve option) — unless the email was granted admin access ahead of
+ * time (bootstrap super-admin or an invite), in which case it's promoted to
+ * admin automatically and the invite is consumed.
  */
 export async function registerVerifiedUser(
   email: string,
@@ -47,18 +53,17 @@ export async function registerVerifiedUser(
     throw new AuthMethodConflictError('email');
   }
 
+  const isGrantedAdmin = await checkAdminGrant(email);
+  const finalRole: Role = isGrantedAdmin ? 'admin' : role;
+  if (isGrantedAdmin) {
+    await consumeAdminInvite(email);
+  }
+
   const result = await pool.query(
     `INSERT INTO users (email, password_hash, role, is_active, email_verified, admin_status)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [
-      email,
-      passwordHash,
-      role,
-      role === 'admin' ? false : true,
-      true,
-      role === 'admin' ? 'pending' : null,
-    ]
+    [email, passwordHash, finalRole, true, true, finalRole === 'admin' ? 'approved' : null]
   );
 
   return result.rows[0];
@@ -113,22 +118,101 @@ export async function loginWithEmailPassword(
   return { valid: true };
 }
 
+export type GoogleAuthResult =
+  | { status: 'existing'; user: Record<string, unknown> }
+  | { status: 'new_role_required'; googleId: string; email: string; name?: string };
+
+const GOOGLE_PENDING_ROLE_PURPOSE = 'google_pending_role';
+
+export interface PendingGoogleRegistration {
+  googleId: string;
+  email: string;
+  name?: string;
+}
+
+/**
+ * Sign a short-lived token carrying the Google profile info for a brand-new
+ * user, so the frontend can ask "job seeker or employer?" before the account
+ * is created. Never carries a role — the role is only ever supplied by the
+ * user on the /auth/google/complete step, not embedded here.
+ */
+export function generatePendingGoogleToken(data: PendingGoogleRegistration): string {
+  return jwt.sign(
+    { purpose: GOOGLE_PENDING_ROLE_PURPOSE, ...data },
+    config.jwt.secret,
+    { expiresIn: '15m' }
+  );
+}
+
+export function verifyPendingGoogleToken(token: string): PendingGoogleRegistration {
+  const payload = jwt.verify(token, config.jwt.secret) as jwt.JwtPayload & PendingGoogleRegistration & {
+    purpose?: string;
+  };
+  if (payload.purpose !== GOOGLE_PENDING_ROLE_PURPOSE) {
+    throw new Error('Invalid pending registration token');
+  }
+  return { googleId: payload.googleId, email: payload.email, name: payload.name };
+}
+
+/**
+ * Create the user row for a brand-new Google sign-up, now that the user has
+ * picked their role. Re-checks for a race (e.g. the same Google account
+ * completing twice, or an email/password account created meanwhile) so this
+ * is safe to call even if the pending token is replayed.
+ */
+export async function createGoogleUserWithRole(
+  data: PendingGoogleRegistration,
+  role: Extract<Role, 'candidate' | 'employer'>
+): Promise<Record<string, unknown>> {
+  const byGoogleId = await pool.query('SELECT * FROM users WHERE google_id = $1', [data.googleId]);
+  if (byGoogleId.rows.length > 0) {
+    return byGoogleId.rows[0];
+  }
+
+  const byEmail = await pool.query('SELECT * FROM users WHERE email = $1', [data.email]);
+  if (byEmail.rows.length > 0) {
+    const existing = byEmail.rows[0];
+    if (existing.password_hash && !existing.google_id) {
+      throw new AuthMethodConflictError('email');
+    }
+    if (!existing.google_id) {
+      await pool.query(
+        'UPDATE users SET google_id = $1, name = $2, email_verified = true WHERE id = $3',
+        [data.googleId, data.name ?? existing.name, existing.id]
+      );
+    }
+    return { ...existing, google_id: data.googleId, email_verified: true };
+  }
+
+  const result = await pool.query(
+    `INSERT INTO users (email, google_id, role, is_active, email_verified, name)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING *`,
+    [data.email, data.googleId, role, true, true, data.name ?? null]
+  );
+  return result.rows[0];
+}
+
 /**
  * Find or create a user via Google OAuth.
  *
  * - Existing Google account → return it.
  * - Email exists with password (email/password account) but no google_id
  *   → throw AuthMethodConflictError('email') — do NOT silently link.
- * - No existing account → create a new one (email_verified = true, Google verifies emails).
+ * - No existing account → this is genuinely a brand-new signup and Google
+ *   never tells us whether the person is a job seeker or an employer, so we
+ *   do NOT create the row here. The caller sends the frontend a "pick your
+ *   role" step (see generatePendingGoogleToken / createGoogleUserWithRole)
+ *   instead of guessing.
  */
 export async function findOrCreateUserByGoogle(
   googleId: string,
   email: string,
   name?: string
-): Promise<Record<string, unknown>> {
+): Promise<GoogleAuthResult> {
   const byGoogleId = await pool.query('SELECT * FROM users WHERE google_id = $1', [googleId]);
   if (byGoogleId.rows.length > 0) {
-    return byGoogleId.rows[0];
+    return { status: 'existing', user: byGoogleId.rows[0] };
   }
 
   const byEmail = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
@@ -143,16 +227,24 @@ export async function findOrCreateUserByGoogle(
         [googleId, name ?? existing.name, existing.id]
       );
     }
-    return { ...existing, google_id: googleId, email_verified: true };
+    return { status: 'existing', user: { ...existing, google_id: googleId, email_verified: true } };
   }
 
-  const result = await pool.query(
-    `INSERT INTO users (email, google_id, role, is_active, email_verified, name)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING *`,
-    [email, googleId, 'candidate', true, true, name ?? null]
-  );
-  return result.rows[0];
+  // Brand-new account. If this email was pre-granted admin access (bootstrap
+  // super-admin or an invite), skip the job-seeker/employer picker entirely —
+  // we already know their role — and log them straight in as an approved admin.
+  if (await checkAdminGrant(email)) {
+    await consumeAdminInvite(email);
+    const result = await pool.query(
+      `INSERT INTO users (email, google_id, role, is_active, email_verified, name, admin_status)
+       VALUES ($1, $2, 'admin', true, true, $3, 'approved')
+       RETURNING *`,
+      [email, googleId, name ?? null]
+    );
+    return { status: 'existing', user: result.rows[0] };
+  }
+
+  return { status: 'new_role_required', googleId, email, name };
 }
 
 export function generateAccessToken(userId: string, role: Role): string {

@@ -20,8 +20,8 @@ passport.use(
           return done(new Error('No email provided by Google'));
         }
 
-        const user = await findOrCreateUserByGoogle(googleId, email, name);
-        return done(null, user);
+        const result = await findOrCreateUserByGoogle(googleId, email, name);
+        return done(null, result as unknown as Express.User);
       } catch (error) {
         return done(error);
       }

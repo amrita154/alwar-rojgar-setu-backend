@@ -1,4 +1,5 @@
 import { pool } from '../config/database';
+import { config } from '../config';
 import { toCamelCase } from '../utils';
 
 export async function getDashboardMetrics() {
@@ -100,7 +101,7 @@ export async function setEmployerVerification(employerId: string, adminId: strin
   return result.rows.length > 0 ? toCamelCase(result.rows[0]) : null;
 }
 
-export async function listCandidates(filters: { search?: string; department?: string; limit: number; offset: number }) {
+export async function listCandidates(filters: { search?: string; trade?: string; limit: number; offset: number }) {
   let where = 'WHERE 1=1';
   const params: unknown[] = [];
 
@@ -108,9 +109,9 @@ export async function listCandidates(filters: { search?: string; department?: st
     params.push(`%${filters.search}%`);
     where += ` AND cp.full_name ILIKE $${params.length}`;
   }
-  if (filters.department) {
-    params.push(filters.department);
-    where += ` AND cp.department = $${params.length}`;
+  if (filters.trade) {
+    params.push(filters.trade);
+    where += ` AND cp.iti_trade = $${params.length}`;
   }
 
   const countResult = await pool.query(`SELECT COUNT(*) FROM candidate_profiles cp ${where}`, params);
@@ -145,14 +146,11 @@ export async function setUserActive(userId: string, active: boolean): Promise<bo
   return result.rows.length > 0;
 }
 
-export async function listAdmins(filters: { status?: string; search?: string; limit: number; offset: number }) {
+/** List current admins — every admin from here on is active/approved by construction. */
+export async function listAdmins(filters: { search?: string; limit: number; offset: number }) {
   let where = "WHERE u.role = 'admin'";
   const params: unknown[] = [];
 
-  if (filters.status) {
-    params.push(filters.status);
-    where += ` AND u.admin_status = $${params.length}`;
-  }
   if (filters.search) {
     params.push(`%${filters.search}%`);
     where += ` AND (u.name ILIKE $${params.length} OR u.email ILIKE $${params.length})`;
@@ -173,13 +171,76 @@ export async function listAdmins(filters: { status?: string; search?: string; li
   return { data: result.rows.map(toCamelCase), total };
 }
 
-export async function setAdminStatus(userId: string, status: 'approved' | 'rejected'): Promise<Record<string, unknown> | null> {
-  const isActive = status === 'approved';
+/**
+ * Check whether an email should become an admin the moment its account is
+ * created — either it's a bootstrap super-admin (env whitelist) or an
+ * existing admin invited it via grantAdminAccess.
+ */
+export async function checkAdminGrant(email: string): Promise<boolean> {
+  const normalized = email.toLowerCase().trim();
+  if (config.admin.superAdminEmails.includes(normalized)) return true;
+  const result = await pool.query('SELECT 1 FROM admin_invites WHERE email = $1', [normalized]);
+  return result.rows.length > 0;
+}
+
+/** Consume (delete) a pending invite once the invited email's account is created. Safe to call even if none exists. */
+export async function consumeAdminInvite(email: string): Promise<void> {
+  await pool.query('DELETE FROM admin_invites WHERE email = $1', [email.toLowerCase().trim()]);
+}
+
+export async function promoteUserToAdmin(userId: string): Promise<Record<string, unknown>> {
   const result = await pool.query(
-    `UPDATE users SET admin_status = $1, is_active = $2
-     WHERE id = $3 AND role = 'admin' RETURNING id AS user_id, name, email, admin_status, is_active, created_at`,
-    [status, isActive, userId]
+    `UPDATE users SET role = 'admin', admin_status = 'approved', is_active = true, updated_at = NOW()
+     WHERE id = $1
+     RETURNING id AS user_id, name, email, admin_status, is_active, created_at`,
+    [userId]
   );
-  return result.rows.length > 0 ? toCamelCase(result.rows[0]) : null;
+  if (result.rows.length === 0) {
+    throw Object.assign(new Error('User not found'), { statusCode: 404 });
+  }
+  return toCamelCase(result.rows[0]);
+}
+
+/**
+ * Grant admin access by email. If the email already has an account, it's
+ * promoted immediately. Otherwise an invite is stored and consumed the
+ * moment that email registers (see checkAdminGrant / consumeAdminInvite).
+ */
+export async function grantAdminAccess(
+  email: string,
+  invitedBy: string
+): Promise<{ kind: 'promoted'; user: Record<string, unknown> } | { kind: 'invited'; invite: Record<string, unknown> }> {
+  const normalized = email.toLowerCase().trim();
+
+  const existing = await pool.query('SELECT id, role FROM users WHERE email = $1', [normalized]);
+  if (existing.rows.length > 0) {
+    if (existing.rows[0].role === 'admin') {
+      throw Object.assign(new Error('This user is already an admin'), { statusCode: 409 });
+    }
+    return { kind: 'promoted', user: await promoteUserToAdmin(existing.rows[0].id) };
+  }
+
+  const result = await pool.query(
+    `INSERT INTO admin_invites (email, invited_by) VALUES ($1, $2)
+     ON CONFLICT (email) DO UPDATE SET invited_by = EXCLUDED.invited_by
+     RETURNING *`,
+    [normalized, invitedBy]
+  );
+  return { kind: 'invited', invite: toCamelCase(result.rows[0]) };
+}
+
+export async function listAdminInvites(): Promise<Record<string, unknown>[]> {
+  const result = await pool.query(
+    `SELECT ai.id, ai.email, ai.created_at, u.name AS invited_by_name, u.email AS invited_by_email
+     FROM admin_invites ai
+     LEFT JOIN users u ON u.id = ai.invited_by
+     ORDER BY ai.created_at DESC`
+  );
+  return result.rows.map(toCamelCase);
+}
+
+export async function cancelAdminInvite(id: string): Promise<boolean> {
+  const result = await pool.query('DELETE FROM admin_invites WHERE id = $1', [id]);
+  return (result.rowCount ?? 0) > 0;
 }
 

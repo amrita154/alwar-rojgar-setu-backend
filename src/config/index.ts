@@ -41,7 +41,11 @@ export const config = {
   },
 
   admin: {
-    inviteCode: process.env.ADMIN_INVITE_CODE || '',
+    /** Bootstrap super-admin(s) — auto-approved on first sign-in, no invite needed. */
+    superAdminEmails: (process.env.SUPER_ADMIN_EMAILS || '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
   },
 
   smtp: {

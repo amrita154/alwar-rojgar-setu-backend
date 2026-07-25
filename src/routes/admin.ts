@@ -10,8 +10,9 @@ import {
   disableUser,
   enableUser,
   getAdmins,
-  approveAdmin,
-  rejectAdmin,
+  grantAdminAccess,
+  getAdminInvites,
+  cancelAdminInvite,
 } from '../controllers/admin';
 
 const router = Router();
@@ -27,7 +28,8 @@ router.get('/candidates/:candidateId', getAdminCandidate);
 router.patch('/users/:userId/disable', disableUser);
 router.patch('/users/:userId/enable', enableUser);
 router.get('/admins', getAdmins);
-router.patch('/admins/:userId/approve', approveAdmin);
-router.patch('/admins/:userId/reject', rejectAdmin);
+router.post('/admins/grant', grantAdminAccess);
+router.get('/admin-invites', getAdminInvites);
+router.delete('/admin-invites/:inviteId', cancelAdminInvite);
 
 export default router;

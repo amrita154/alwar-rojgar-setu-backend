@@ -50,7 +50,10 @@ export async function sendOtp(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const validRoles: Role[] = ['candidate', 'employer', 'admin'];
+  // Admin is no longer a self-serve signup option — it's only ever granted by
+  // an existing admin (see grantAdminAccess) or the bootstrap super-admin
+  // whitelist, both of which transparently override this at registerVerifiedUser time.
+  const validRoles: Role[] = ['candidate', 'employer'];
   if (!role || !validRoles.includes(role)) {
     res.status(400).json({ message: 'Invalid role' });
     return;
@@ -135,12 +138,7 @@ export async function verifyOtpAndRegister(req: Request, res: Response): Promise
       pending.role
     );
 
-    console.log(`[AUTH] User registered via OTP | email=${normalizedEmail} | role=${pending.role} | userId=${user.id}`);
-
-    if (pending.role === 'admin') {
-      res.status(202).json({ pending: true, message: 'Account created. An existing admin must approve it before you can log in.' });
-      return;
-    }
+    console.log(`[AUTH] User registered via OTP | email=${normalizedEmail} | role=${user.role} | userId=${user.id}`);
 
     const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
     const refreshToken = await authService.generateAndStoreRefreshToken(user.id as string);
@@ -205,7 +203,23 @@ export async function googleCallback(req: AuthRequest, res: Response): Promise<v
     return;
   }
 
-  const user = req.user as unknown as Record<string, unknown>;
+  const result = req.user as unknown as authService.GoogleAuthResult;
+
+  if (result.status === 'new_role_required') {
+    // Brand-new Google account — we don't know if they're a job seeker or an
+    // employer, so hand off to the frontend to ask, instead of guessing.
+    const pendingToken = authService.generatePendingGoogleToken({
+      googleId: result.googleId,
+      email: result.email,
+      name: result.name,
+    });
+    res.redirect(
+      `${config.frontend.url}/auth/google/callback?status=needs-role&pendingToken=${encodeURIComponent(pendingToken)}`
+    );
+    return;
+  }
+
+  const user = result.user;
 
   if (!user.is_active) {
     if (user.admin_status === 'pending') {
@@ -239,6 +253,53 @@ export async function googleCallback(req: AuthRequest, res: Response): Promise<v
   } catch (err) {
     console.error('[AUTH] Google callback FAILED:', err);
     res.redirect(`${config.frontend.url}/auth/google/callback?status=error`);
+  }
+}
+
+/**
+ * POST /auth/google/complete
+ *
+ * Second step of Google sign-up for brand-new accounts: the frontend showed
+ * a "job seeker or employer?" prompt after /auth/google/callback redirected
+ * with status=needs-role, and now submits the chosen role plus the signed
+ * pendingToken (which carries the Google identity — never a client-supplied
+ * googleId/email) to actually create the account.
+ */
+export async function completeGoogleSignup(req: Request, res: Response): Promise<void> {
+  const { pendingToken, role } = req.body;
+
+  if (!pendingToken || typeof pendingToken !== 'string') {
+    res.status(400).json({ message: 'Missing or invalid registration token' });
+    return;
+  }
+  // Admin is never offered on this screen — a brand-new signup whose email
+  // was pre-granted admin access is created as admin further upstream (see
+  // findOrCreateUserByGoogle) and never reaches status=needs-role at all.
+  if (role !== 'candidate' && role !== 'employer') {
+    res.status(400).json({ message: 'Role must be candidate or employer' });
+    return;
+  }
+
+  try {
+    const pending = authService.verifyPendingGoogleToken(pendingToken);
+    const user = await authService.createGoogleUserWithRole(pending, role);
+
+    console.log(`[AUTH] Google signup completed | userId=${user.id} | email=${user.email} | role=${user.role}`);
+
+    const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
+    const refreshToken = await authService.generateAndStoreRefreshToken(user.id as string);
+
+    setCookieAndRespond(res, accessToken, refreshToken, 201);
+  } catch (err) {
+    if (err instanceof AuthMethodConflictError) {
+      res.status(409).json({
+        message: 'This email is already registered. Please log in.',
+        conflictMethod: err.conflictMethod,
+      });
+      return;
+    }
+    console.error('[AUTH] Google signup completion FAILED:', err);
+    res.status(400).json({ message: 'Registration link expired or invalid. Please try Google sign-in again.' });
   }
 }
 

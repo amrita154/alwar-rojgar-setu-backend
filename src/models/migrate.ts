@@ -113,6 +113,18 @@ DO $$ BEGIN
 EXCEPTION WHEN others THEN null;
 END $$;
 
+-- Admin invites: emails granted admin access before they've signed up yet.
+-- Consumed (deleted) the moment that email's account is actually created;
+-- an existing account is promoted directly instead of going through here.
+CREATE TABLE IF NOT EXISTS admin_invites (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email VARCHAR(255) NOT NULL UNIQUE,
+  invited_by UUID REFERENCES users(id),
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_invites_email ON admin_invites(email);
+
 -- 3. Candidate Profile table
 CREATE TABLE IF NOT EXISTS candidate_profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

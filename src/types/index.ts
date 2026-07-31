@@ -144,3 +144,12 @@ export interface JwtPayload {
   userId: string;
   role: Role;
 }
+
+declare global {
+  namespace Express {
+    interface User {
+      userId: string;
+      role: Role;
+    }
+  }
+}

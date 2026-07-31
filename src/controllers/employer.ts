@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { toCamelCase } from '../utils';
-import { uploadFile } from '../utils/storage';
+import { uploadFile, uploadLogo, deleteUploadedFile } from '../utils/storage';
 import * as employerService from '../services/employer';
 import { pool } from '../config/database';
 
@@ -103,7 +103,11 @@ export async function uploadEmployerLogo(req: AuthRequest, res: Response): Promi
     return;
   }
 
-  const logoUrl = await uploadFile(req.file);
+  if (profile.logo_url) {
+    await deleteUploadedFile(profile.logo_url);
+  }
+
+  const logoUrl = await uploadLogo(req.file);
   const updated = await employerService.updateProfile(userId, { logoUrl });
   res.json(updated);
 }

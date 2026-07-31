@@ -33,6 +33,7 @@ export const config = {
 
   upload: {
     dir: path.resolve(process.env.UPLOAD_DIR || './uploads'),
+    logoDir: path.resolve(process.env.LOGO_UPLOAD_DIR || './uploads/company-logos'),
     maxFileSizeMB: parseInt(process.env.MAX_FILE_SIZE_MB || '5', 10),
   },
 

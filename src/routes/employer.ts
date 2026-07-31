@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate, requireRole } from '../middleware/auth';
-import { upload } from '../middleware/upload';
+import { upload, uploadLogoMulter } from '../middleware/upload';
 import {
   createEmployerProfile,
   getEmployerProfile,
@@ -18,7 +18,7 @@ router.use(authenticate, requireRole('employer'));
 router.post('/', createEmployerProfile);
 router.get('/', getEmployerProfile);
 router.patch('/', updateEmployerProfile);
-router.post('/logo', upload.single('file'), uploadEmployerLogo);
+router.post('/logo', uploadLogoMulter.single('file'), uploadEmployerLogo);
 router.get('/documents', getEmployerDocuments);
 router.post('/documents', upload.single('file'), uploadEmployerDocument);
 router.delete('/documents/:documentId', deleteEmployerDocument);

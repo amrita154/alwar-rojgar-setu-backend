@@ -20,7 +20,10 @@ function serveLocalOrRedirect(res: Response, storedUrl: string, filename: string
     res.redirect(storedUrl);
     return;
   }
-  const localPath = path.join(config.upload.dir, filename);
+  const isLogo = storedUrl.startsWith('/uploads/company-logos/');
+  const localPath = isLogo
+    ? path.join(config.upload.logoDir, filename)
+    : path.join(config.upload.dir, filename);
   if (!fs.existsSync(localPath)) {
     res.status(404).json({ message: 'File not found' });
     return;

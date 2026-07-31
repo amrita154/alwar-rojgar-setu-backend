@@ -56,6 +56,10 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Serve uploaded files statically (logos are public; in production Nginx handles this)
+app.use('/uploads/company-logos', express.static(config.upload.logoDir));
+app.use('/uploads', express.static(config.upload.dir));
+
 // Health check
 app.get('/api/v1/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

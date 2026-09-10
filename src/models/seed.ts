@@ -150,6 +150,18 @@ async function seed() {
       ON CONFLICT (user_id) DO NOTHING
     `);
 
+    console.log('\n✓ Seed complete\n');
+    console.log('--- Admin credentials (password: Admin@123) ---');
+    console.log('  [super_admin] alwarrojarsetu@gmail.com       — Alwar Rojgar Setu Admin');
+    console.log('  [super_admin] dicalwar@rajasthan.gov.in      — Harish Mittal (GM DIC)');
+    console.log('  [read_only]   sdmalw.alw@gmail.com           — Shree Madhav Bharadwaj (OIC)');
+    console.log('  [read_only]   alwar@riico.co.in              — Paresh Saxena (RM RIICO)');
+    console.log('  [read_only]   iti_alwar_govt@yahoo.co.in     — Manoj Aggrawal (Govt ITI Principal)');
+    console.log('  [read_only]   deo.alw.emp@rajasthan.gov.in   — Harish Nainakwal (District Employment Office)');
+    console.log('--- Demo credentials ---');
+    console.log('  [employer]    demo.employer@example.com      — Employer@123');
+    console.log('  [candidate]   demo.candidate@example.com     — Candidate@123');
+
   } catch (err) {
     console.error('Seed failed:', err);
     process.exit(1);

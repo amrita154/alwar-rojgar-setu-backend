@@ -87,7 +87,6 @@ export async function sendOtp(req: Request, res: Response): Promise<void> {
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     await otpService.generateAndSendOtp(normalizedEmail, passwordHash, role as Role);
 
-    console.log(`[AUTH] OTP sent | email=${normalizedEmail} | role=${role}`);
     res.status(200).json({ message: 'Verification code sent to your email. It expires in 10 minutes.' });
   } catch (err) {
     if (err instanceof OtpDailyLimitError) {
@@ -138,7 +137,6 @@ export async function verifyOtpAndRegister(req: Request, res: Response): Promise
       pending.role
     );
 
-    console.log(`[AUTH] User registered via OTP | email=${normalizedEmail} | role=${user.role} | userId=${user.id}`);
 
     const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
     const refreshToken = await authService.generateAndStoreRefreshToken(user.id as string);
@@ -188,7 +186,6 @@ export async function login(req: Request, res: Response): Promise<void> {
     const accessToken = authService.generateAccessToken(userResult.id as string, userResult.role as Role);
     const refreshToken = await authService.generateAndStoreRefreshToken(userResult.id as string);
 
-    console.log(`[AUTH] Login SUCCESS | email=${email} | userId=${userResult.id} | role=${userResult.role}`);
 
     setCookieAndRespond(res, accessToken, refreshToken);
   } catch (err) {
@@ -239,7 +236,6 @@ export async function googleCallback(req: AuthRequest, res: Response): Promise<v
     const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
     const refreshToken = await authService.generateAndStoreRefreshToken(user.id as string);
 
-    console.log(`[AUTH] Google login SUCCESS | userId=${user.id} | email=${user.email}`);
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
@@ -284,7 +280,6 @@ export async function completeGoogleSignup(req: Request, res: Response): Promise
     const pending = authService.verifyPendingGoogleToken(pendingToken);
     const user = await authService.createGoogleUserWithRole(pending, role);
 
-    console.log(`[AUTH] Google signup completed | userId=${user.id} | email=${user.email} | role=${user.role}`);
 
     const accessToken = authService.generateAccessToken(user.id as string, user.role as Role);
     const refreshToken = await authService.generateAndStoreRefreshToken(user.id as string);
@@ -424,6 +419,46 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
     res.status(200).json({ message: 'Password reset successfully. You can now log in.' });
   } catch (err) {
     console.error('[AUTH] resetPassword error:', err);
+    res.status(500).json({ message: 'Internal error' });
+  }
+}
+
+/**
+ * Change the password of the currently-authenticated user (employers, admins,
+ * candidates). Requires the current password for verification.
+ */
+export async function changePassword(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.userId;
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword?: string;
+      newPassword?: string;
+    };
+
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ message: 'Current and new password are required' });
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      res.status(400).json({ message: 'Password must be at least 8 characters' });
+      return;
+    }
+
+    if (newPassword === currentPassword) {
+      res.status(400).json({ message: 'New password must be different from the current password' });
+      return;
+    }
+
+    await authService.changePassword(userId, currentPassword, newPassword);
+    res.status(200).json({ message: 'Password changed successfully.' });
+  } catch (err) {
+    const statusCode = (err as { statusCode?: number }).statusCode;
+    if (statusCode) {
+      res.status(statusCode).json({ message: (err as Error).message });
+      return;
+    }
+    console.error('[AUTH] changePassword error:', err);
     res.status(500).json({ message: 'Internal error' });
   }
 }

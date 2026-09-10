@@ -325,10 +325,8 @@ END $$;
 `;
 
 async function migrate() {
-  console.log('Running database migration...');
   try {
     await pool.query(migration);
-    console.log('Migration completed successfully.');
   } catch (err) {
     console.error('Migration failed:', err);
     process.exit(1);

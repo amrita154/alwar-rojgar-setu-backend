@@ -10,6 +10,7 @@ import {
   logout,
   forgotPassword,
   resetPassword,
+  changePassword,
 } from '../controllers/auth';
 import { AuthMethodConflictError } from '../services/auth';
 import { authenticate } from '../middleware/auth';
@@ -63,6 +64,7 @@ router.post('/forgot-password', loginIpLimiter, loginEmailLimiter, forgotPasswor
 router.post('/reset-password', otpLimiter, resetPassword);
 
 router.post('/token/refresh', refreshToken);
+router.post('/change-password', authenticate, loginIpLimiter, changePassword);
 router.post('/logout', authenticate, logout);
 
 export default router;

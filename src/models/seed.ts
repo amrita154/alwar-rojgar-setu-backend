@@ -2,7 +2,16 @@ import { pool } from '../config/database';
 import bcrypt from 'bcrypt';
 
 async function seed() {
-  console.log('Seeding database...');
+  // Safety guard: the seeder inserts demo employers/jobs/candidates. Never let
+  // that run against production, where it would expose fake jobs to real users.
+  // Override deliberately with ALLOW_PROD_SEED=true if you truly mean to.
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PROD_SEED !== 'true') {
+    console.error(
+      'Refusing to seed: NODE_ENV=production. Set ALLOW_PROD_SEED=true to override (not recommended).',
+    );
+    process.exit(1);
+  }
+
   try {
     // Demo passwords (will be bcrypt hashed)
     const adminPasswordHash = await bcrypt.hash('Admin@123', 12);
@@ -80,13 +89,6 @@ async function seed() {
       ON CONFLICT (user_id) DO NOTHING
     `);
 
-    console.log('');
-    console.log('Seed complete.');
-    console.log('──────────────────────────────────────────');
-    console.log('Admin          alwarrojarsetu@gmail.com   Pass: Admin@123');
-    console.log('Demo Employer  demo.employer@example.com  Pass: Employer@123');
-    console.log('Demo Candidate demo.candidate@example.com Pass: Candidate@123');
-    console.log('──────────────────────────────────────────');
   } catch (err) {
     console.error('Seed failed:', err);
     process.exit(1);

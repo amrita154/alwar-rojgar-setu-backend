@@ -52,6 +52,15 @@ export async function getDashboardMetrics() {
     LIMIT 10
   `);
 
+  const hiredByGender = await pool.query(`
+    SELECT COALESCE(cp.gender, 'not_specified') as gender, COUNT(a.id) as count
+    FROM applications a
+    JOIN candidate_profiles cp ON cp.id = a.candidate_id
+    WHERE a.status = 'hired'
+    GROUP BY cp.gender
+    ORDER BY count DESC
+  `);
+
   return {
     totalCandidates: parseInt(candidates.rows[0].count, 10),
     totalEmployers: parseInt(employers.rows[0].count, 10),
@@ -65,6 +74,7 @@ export async function getDashboardMetrics() {
     applicationsByStatus: applicationsByStatus.rows.map(r => ({ status: r.status, count: parseInt(r.count, 10) })),
     jobsByEmployer: jobsByEmployer.rows.map(r => ({ companyName: r.company_name, count: parseInt(r.count, 10) })),
     rejectionsByEmployer: rejectionsByEmployer.rows.map(r => ({ companyName: r.company_name, count: parseInt(r.count, 10) })),
+    hiredByGender: hiredByGender.rows.map(r => ({ gender: r.gender, count: parseInt(r.count, 10) })),
   };
 }
 

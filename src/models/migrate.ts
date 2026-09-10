@@ -226,6 +226,18 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN null;
 END $$;
 
+-- Admin role (super_admin | read_only) — NULL for non-admins
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN admin_role VARCHAR(20);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
+-- Admin invites carry the role that will be assigned on sign-up
+DO $$ BEGIN
+  ALTER TABLE admin_invites ADD COLUMN admin_role VARCHAR(20) NOT NULL DEFAULT 'read_only';
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
+
 -- 5. Employer Documents table
 CREATE TABLE IF NOT EXISTS employer_documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

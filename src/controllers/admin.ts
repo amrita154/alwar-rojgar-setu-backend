@@ -125,15 +125,16 @@ export async function getAdmins(req: AuthRequest, res: Response): Promise<void> 
  * moment that email signs up (see authService.checkAdminGrant).
  */
 export async function grantAdminAccess(req: AuthRequest, res: Response): Promise<void> {
-  const { email } = req.body;
+  const { email, adminRole } = req.body;
 
   if (!email || typeof email !== 'string') {
     res.status(400).json({ message: 'Email is required' });
     return;
   }
+  const role = adminRole === 'super_admin' ? 'super_admin' : 'read_only';
 
   try {
-    const result = await adminService.grantAdminAccess(email, req.user!.userId);
+    const result = await adminService.grantAdminAccess(email, req.user!.userId, role);
     res.status(201).json(result);
   } catch (err) {
     const statusCode = (err as { statusCode?: number }).statusCode ?? 500;

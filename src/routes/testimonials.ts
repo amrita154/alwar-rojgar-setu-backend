@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, requireRole } from '../middleware/auth';
+import { authenticate, requireRole, requireSuperAdmin } from '../middleware/auth';
 import {
   getPublicTestimonials,
   adminListTestimonials,
@@ -13,10 +13,12 @@ const router = Router();
 // Public — no auth required
 router.get('/', getPublicTestimonials);
 
-// Admin CRUD
+// Read — all admins
 router.get('/admin', authenticate, requireRole('admin'), adminListTestimonials);
-router.post('/admin', authenticate, requireRole('admin'), adminCreateTestimonial);
-router.patch('/admin/:id', authenticate, requireRole('admin'), adminUpdateTestimonial);
-router.delete('/admin/:id', authenticate, requireRole('admin'), adminDeleteTestimonial);
+
+// Write — super_admin only
+router.post('/admin', authenticate, requireRole('admin'), requireSuperAdmin, adminCreateTestimonial);
+router.patch('/admin/:id', authenticate, requireRole('admin'), requireSuperAdmin, adminUpdateTestimonial);
+router.delete('/admin/:id', authenticate, requireRole('admin'), requireSuperAdmin, adminDeleteTestimonial);
 
 export default router;

@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../config/database';
 import { config } from '../config';
 import { Role, JwtPayload } from '../types';
-import { checkAdminGrant, consumeAdminInvite } from './admin';
+import { checkAdminGrant, consumeAdminInvite, getAdminGrantedRole } from './admin';
 
 /**
  * Thrown when a user tries to register with an email that is already taken,
@@ -55,15 +55,17 @@ export async function registerVerifiedUser(
 
   const isGrantedAdmin = await checkAdminGrant(email);
   const finalRole: Role = isGrantedAdmin ? 'admin' : role;
+  let grantedAdminRole: string | null = null;
   if (isGrantedAdmin) {
+    grantedAdminRole = await getAdminGrantedRole(email);
     await consumeAdminInvite(email);
   }
 
   const result = await pool.query(
-    `INSERT INTO users (email, password_hash, role, is_active, email_verified, admin_status)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO users (email, password_hash, role, is_active, email_verified, admin_status, admin_role)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [email, passwordHash, finalRole, true, true, finalRole === 'admin' ? 'approved' : null]
+    [email, passwordHash, finalRole, true, true, finalRole === 'admin' ? 'approved' : null, grantedAdminRole]
   );
 
   return result.rows[0];

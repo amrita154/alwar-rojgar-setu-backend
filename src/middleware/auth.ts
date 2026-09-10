@@ -43,3 +43,25 @@ export function requireRole(...roles: Role[]) {
     next();
   };
 }
+
+export function requireSuperAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
+  if (!req.user || req.user.role !== 'admin') {
+    res.status(403).json({ message: 'Insufficient permissions' });
+    return;
+  }
+  pool.query('SELECT admin_role, is_active FROM users WHERE id = $1', [req.user.userId])
+    .then((result) => {
+      if (result.rows.length === 0 || !result.rows[0].is_active) {
+        res.status(403).json({ message: 'Account is disabled' });
+        return;
+      }
+      if (result.rows[0].admin_role !== 'super_admin') {
+        res.status(403).json({ message: 'Super admin access required' });
+        return;
+      }
+      next();
+    })
+    .catch((err) => {
+      next(err);
+    });
+}

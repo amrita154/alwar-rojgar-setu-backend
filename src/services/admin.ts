@@ -193,7 +193,7 @@ export async function listAdmins(filters: { search?: string; limit: number; offs
 
   params.push(filters.limit, filters.offset);
   const result = await pool.query(
-    `SELECT id AS user_id, name, email, admin_status, is_active, created_at
+    `SELECT id AS user_id, name, email, admin_status, admin_role, is_active, created_at
      FROM users u ${where}
      ORDER BY created_at DESC
      LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -215,17 +215,29 @@ export async function checkAdminGrant(email: string): Promise<boolean> {
   return result.rows.length > 0;
 }
 
+/**
+ * Return the admin_role that should be assigned to a newly registered email.
+ * Env-whitelisted emails get super_admin; invite-based emails get whatever
+ * role was specified at invite time (default: read_only).
+ */
+export async function getAdminGrantedRole(email: string): Promise<string> {
+  const normalized = email.toLowerCase().trim();
+  if (config.admin.superAdminEmails.includes(normalized)) return 'super_admin';
+  const result = await pool.query('SELECT admin_role FROM admin_invites WHERE email = $1', [normalized]);
+  return result.rows[0]?.admin_role ?? 'read_only';
+}
+
 /** Consume (delete) a pending invite once the invited email's account is created. Safe to call even if none exists. */
 export async function consumeAdminInvite(email: string): Promise<void> {
   await pool.query('DELETE FROM admin_invites WHERE email = $1', [email.toLowerCase().trim()]);
 }
 
-export async function promoteUserToAdmin(userId: string): Promise<Record<string, unknown>> {
+export async function promoteUserToAdmin(userId: string, adminRole = 'read_only'): Promise<Record<string, unknown>> {
   const result = await pool.query(
-    `UPDATE users SET role = 'admin', admin_status = 'approved', is_active = true, updated_at = NOW()
+    `UPDATE users SET role = 'admin', admin_status = 'approved', admin_role = $2, is_active = true, updated_at = NOW()
      WHERE id = $1
-     RETURNING id AS user_id, name, email, admin_status, is_active, created_at`,
-    [userId]
+     RETURNING id AS user_id, name, email, admin_status, admin_role, is_active, created_at`,
+    [userId, adminRole]
   );
   if (result.rows.length === 0) {
     throw Object.assign(new Error('User not found'), { statusCode: 404 });
@@ -240,7 +252,8 @@ export async function promoteUserToAdmin(userId: string): Promise<Record<string,
  */
 export async function grantAdminAccess(
   email: string,
-  invitedBy: string
+  invitedBy: string,
+  adminRole = 'read_only'
 ): Promise<{ kind: 'promoted'; user: Record<string, unknown> } | { kind: 'invited'; invite: Record<string, unknown> }> {
   const normalized = email.toLowerCase().trim();
 
@@ -249,14 +262,14 @@ export async function grantAdminAccess(
     if (existing.rows[0].role === 'admin') {
       throw Object.assign(new Error('This user is already an admin'), { statusCode: 409 });
     }
-    return { kind: 'promoted', user: await promoteUserToAdmin(existing.rows[0].id) };
+    return { kind: 'promoted', user: await promoteUserToAdmin(existing.rows[0].id, adminRole) };
   }
 
   const result = await pool.query(
-    `INSERT INTO admin_invites (email, invited_by) VALUES ($1, $2)
-     ON CONFLICT (email) DO UPDATE SET invited_by = EXCLUDED.invited_by
+    `INSERT INTO admin_invites (email, invited_by, admin_role) VALUES ($1, $2, $3)
+     ON CONFLICT (email) DO UPDATE SET invited_by = EXCLUDED.invited_by, admin_role = EXCLUDED.admin_role
      RETURNING *`,
-    [normalized, invitedBy]
+    [normalized, invitedBy, adminRole]
   );
   return { kind: 'invited', invite: toCamelCase(result.rows[0]) };
 }

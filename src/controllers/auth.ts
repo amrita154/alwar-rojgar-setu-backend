@@ -422,3 +422,43 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
     res.status(500).json({ message: 'Internal error' });
   }
 }
+
+/**
+ * Change the password of the currently-authenticated user (employers, admins,
+ * candidates). Requires the current password for verification.
+ */
+export async function changePassword(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.userId;
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword?: string;
+      newPassword?: string;
+    };
+
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ message: 'Current and new password are required' });
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      res.status(400).json({ message: 'Password must be at least 8 characters' });
+      return;
+    }
+
+    if (newPassword === currentPassword) {
+      res.status(400).json({ message: 'New password must be different from the current password' });
+      return;
+    }
+
+    await authService.changePassword(userId, currentPassword, newPassword);
+    res.status(200).json({ message: 'Password changed successfully.' });
+  } catch (err) {
+    const statusCode = (err as { statusCode?: number }).statusCode;
+    if (statusCode) {
+      res.status(statusCode).json({ message: (err as Error).message });
+      return;
+    }
+    console.error('[AUTH] changePassword error:', err);
+    res.status(500).json({ message: 'Internal error' });
+  }
+}

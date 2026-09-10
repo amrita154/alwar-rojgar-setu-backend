@@ -5,6 +5,7 @@ const ALLOWED_UPDATE_FIELDS: Record<string, string> = {
   fullName: 'full_name',
   phone: 'phone',
   description: 'description',
+  gender: 'gender',
   highestEducation: 'highest_education',
   itiTrade: 'iti_trade',
   itiCollege: 'iti_college',
@@ -30,18 +31,18 @@ export async function getProfileId(userId: string): Promise<string | null> {
 
 export async function createProfile(userId: string, data: Record<string, unknown>) {
   const {
-    fullName, email, phone, description, highestEducation, itiTrade, itiCollege, department,
+    fullName, email, phone, description, gender, highestEducation, itiTrade, itiCollege, department,
     graduationYear, workExperienceMonths, expectedSalary, skills,
     city, district, pincode,
   } = data;
 
   const result = await pool.query(
     `INSERT INTO candidate_profiles
-      (user_id, full_name, email, phone, description, highest_education, iti_trade, iti_college,
+      (user_id, full_name, email, phone, description, gender, highest_education, iti_trade, iti_college,
        department, graduation_year, work_experience_months, expected_salary, skills, city, district, pincode)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
     RETURNING *`,
-    [userId, fullName, email || null, phone || null, description || null,
+    [userId, fullName, email || null, phone || null, description || null, gender || null,
      highestEducation || null, itiTrade || null, itiCollege || null, department || null,
      graduationYear || null, workExperienceMonths || null, expectedSalary || null,
      skills || null, city || null, district || null, pincode || null]

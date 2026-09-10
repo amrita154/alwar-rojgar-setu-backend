@@ -221,6 +221,10 @@ DO $$ BEGIN
   ALTER TABLE candidate_profiles ADD COLUMN description TEXT;
 EXCEPTION WHEN duplicate_column THEN null;
 END $$;
+DO $$ BEGIN
+  ALTER TABLE candidate_profiles ADD COLUMN gender VARCHAR(20);
+EXCEPTION WHEN duplicate_column THEN null;
+END $$;
 
 -- 5. Employer Documents table
 CREATE TABLE IF NOT EXISTS employer_documents (

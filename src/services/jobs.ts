@@ -155,8 +155,19 @@ export async function getApplicants(jobId: string) {
     [jobId]
   );
 
+  const CONTACT_VISIBLE_STATUSES = new Set(['interview_scheduled', 'hired']);
+
   return result.rows.map((row) => {
     const { candidate, ...app } = row;
-    return { ...toCamelCase(app), candidate: candidate ? toCamelCase(candidate) : null };
+    const appCamel = toCamelCase(app);
+    if (!candidate) return { ...appCamel, candidate: null };
+
+    const candidateCamel = toCamelCase(candidate) as Record<string, unknown>;
+    // Phone and email only exposed once an interview is scheduled or candidate is hired
+    if (!CONTACT_VISIBLE_STATUSES.has(row.status)) {
+      delete candidateCamel['phone'];
+      delete candidateCamel['email'];
+    }
+    return { ...appCamel, candidate: candidateCamel };
   });
 }

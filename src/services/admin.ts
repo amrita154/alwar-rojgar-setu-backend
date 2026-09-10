@@ -32,6 +32,26 @@ export async function getDashboardMetrics() {
     'SELECT status, COUNT(*) as count FROM applications GROUP BY status'
   );
 
+  const jobsByEmployer = await pool.query(`
+    SELECT ep.company_name, COUNT(j.id) as count
+    FROM employer_profiles ep
+    JOIN jobs j ON j.employer_id = ep.id
+    GROUP BY ep.id, ep.company_name
+    ORDER BY count DESC
+    LIMIT 10
+  `);
+
+  const rejectionsByEmployer = await pool.query(`
+    SELECT ep.company_name, COUNT(a.id) as count
+    FROM applications a
+    JOIN jobs j ON j.id = a.job_id
+    JOIN employer_profiles ep ON ep.id = j.employer_id
+    WHERE a.status = 'rejected'
+    GROUP BY ep.id, ep.company_name
+    ORDER BY count DESC
+    LIMIT 10
+  `);
+
   return {
     totalCandidates: parseInt(candidates.rows[0].count, 10),
     totalEmployers: parseInt(employers.rows[0].count, 10),
@@ -43,6 +63,8 @@ export async function getDashboardMetrics() {
     registrationsByMonth: registrationsByMonth.rows.map(r => ({ month: r.month, count: parseInt(r.count, 10) })),
     placementsByMonth: placementsByMonth.rows.map(r => ({ month: r.month, count: parseInt(r.count, 10) })),
     applicationsByStatus: applicationsByStatus.rows.map(r => ({ status: r.status, count: parseInt(r.count, 10) })),
+    jobsByEmployer: jobsByEmployer.rows.map(r => ({ companyName: r.company_name, count: parseInt(r.count, 10) })),
+    rejectionsByEmployer: rejectionsByEmployer.rows.map(r => ({ companyName: r.company_name, count: parseInt(r.count, 10) })),
   };
 }
 

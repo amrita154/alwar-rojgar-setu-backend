@@ -308,3 +308,40 @@ export async function resetPassword(email: string, newPassword: string): Promise
     throw Object.assign(new Error('User not found'), { statusCode: 404 });
   }
 }
+
+/**
+ * Change the password for a logged-in user: verify the current password, then
+ * store a new hash. Rejects accounts with no password set (e.g. Google-only).
+ */
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  const result = await pool.query(
+    'SELECT password_hash FROM users WHERE id = $1 AND is_active = true',
+    [userId]
+  );
+  if (result.rows.length === 0) {
+    throw Object.assign(new Error('User not found'), { statusCode: 404 });
+  }
+
+  const passwordHash = result.rows[0].password_hash as string | null;
+  if (!passwordHash) {
+    throw Object.assign(
+      new Error('No password is set for this account. Use "Forgot password" to create one.'),
+      { statusCode: 400 }
+    );
+  }
+
+  const isValid = await bcrypt.compare(currentPassword, passwordHash);
+  if (!isValid) {
+    throw Object.assign(new Error('Current password is incorrect'), { statusCode: 400 });
+  }
+
+  const newHash = await bcrypt.hash(newPassword, 12);
+  await pool.query(
+    'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+    [newHash, userId]
+  );
+}

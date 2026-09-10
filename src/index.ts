@@ -85,8 +85,6 @@ app.use(errorHandler);
 
 if (!process.env.VERCEL) {
   app.listen(config.port, () => {
-    console.log(`Server running on port ${config.port} (${config.nodeEnv})`);
-    console.log(`API base: http://localhost:${config.port}/api/v1`);
   });
 }
 

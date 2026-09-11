@@ -61,6 +61,13 @@ export async function getDashboardMetrics() {
     ORDER BY count DESC
   `);
 
+  const candidatesByGender = await pool.query(`
+    SELECT COALESCE(gender, 'not_specified') as gender, COUNT(*) as count
+    FROM candidate_profiles
+    GROUP BY gender
+    ORDER BY count DESC
+  `);
+
   return {
     totalCandidates: parseInt(candidates.rows[0].count, 10),
     totalEmployers: parseInt(employers.rows[0].count, 10),
@@ -75,6 +82,7 @@ export async function getDashboardMetrics() {
     jobsByEmployer: jobsByEmployer.rows.map(r => ({ companyName: r.company_name, count: parseInt(r.count, 10) })),
     rejectionsByEmployer: rejectionsByEmployer.rows.map(r => ({ companyName: r.company_name, count: parseInt(r.count, 10) })),
     hiredByGender: hiredByGender.rows.map(r => ({ gender: r.gender, count: parseInt(r.count, 10) })),
+    candidatesByGender: candidatesByGender.rows.map(r => ({ gender: r.gender, count: parseInt(r.count, 10) })),
   };
 }
 

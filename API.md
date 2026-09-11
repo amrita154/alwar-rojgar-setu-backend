@@ -333,9 +333,32 @@ Update application status.
 }
 ```
 
-**status values:** `received` → `viewed` → `shortlisted` → `hired` | `rejected`
+**status values:** `received` → `viewed` → `shortlisted` → `interview_scheduled` → `hired` | `rejected`
 
 > `reason` — used when rejecting. `joiningDate` — used when hiring. `attributedToPlatform` — boolean tracking.
+> Note: `interview_scheduled` cannot be set via this endpoint — use `PATCH /interview` instead.
+
+---
+
+### PATCH `/job-applications/:applicationId/interview` 🔒 employer | admin
+Schedule an interview. Sets status to `interview_scheduled` and stores the datetime.
+Unlocks candidate contact details (phone + email) in `GET /jobs/:jobId/applications` response.
+
+**Body:**
+```json
+{
+  "interviewAt": "2026-09-20T10:00:00+05:30",
+  "notes": "Bring your ITI certificate. Meet at the main gate."
+}
+```
+`interviewAt` required (ISO datetime string). `notes` optional.
+
+**Response:** Updated application with `status: "interview_scheduled"`, `interviewAt`, `interviewNotes`.
+
+---
+
+### Contact detail exposure rule
+`GET /jobs/:jobId/applications` returns candidate `phone` and `email` **only** when application `status` is `interview_scheduled` or `hired`. For all other statuses these fields are omitted from the candidate object.
 
 ---
 
@@ -402,6 +425,73 @@ Disable a user account (blocks login).
 
 ### PATCH `/admin/users/:userId/enable`
 Re-enable a user account.
+
+---
+
+## Testimonials — `/api/v1/testimonials`
+
+### GET `/testimonials` — Public
+Published testimonials for the homepage, ordered by `display_order` ASC.
+
+**Response:** Array of testimonial objects.
+```json
+[
+  {
+    "id": "uuid",
+    "candidateId": "uuid | null",
+    "name": "Rahul Sharma",
+    "photoUrl": null,
+    "trade": "Fitter",
+    "body": "Mujhe yahan se 3 mahine mein Havells mein job mil gayi.",
+    "isPublished": true,
+    "displayOrder": 0,
+    "createdAt": "...",
+    "updatedAt": "..."
+  }
+]
+```
+
+---
+
+### GET `/testimonials/admin` 🔒 admin
+All testimonials (published + draft).
+
+---
+
+### POST `/testimonials/admin` 🔒 admin
+Create a testimonial.
+
+**Body:**
+```json
+{
+  "name": "Rahul Sharma",
+  "body": "Quote text here.",
+  "trade": "Fitter",
+  "photoUrl": null,
+  "candidateId": null,
+  "isPublished": false,
+  "displayOrder": 0
+}
+```
+`name` and `body` are required. All other fields optional.
+
+**Response:** `201` — created testimonial.
+
+---
+
+### PATCH `/testimonials/admin/:id` 🔒 admin
+Update any field(s) of a testimonial. Partial update — only send what changes.
+
+**Common use:** toggle `isPublished` to publish/unpublish.
+
+**Response:** Updated testimonial.
+
+---
+
+### DELETE `/testimonials/admin/:id` 🔒 admin
+Permanently delete a testimonial.
+
+**Response:** `204 No Content`
 
 ---
 

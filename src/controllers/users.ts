@@ -23,8 +23,16 @@ export async function getCurrentUser(req: AuthRequest, res: Response): Promise<v
     profileCompleted = true;
   }
 
-  const userResult = await pool.query('SELECT is_active FROM users WHERE id = $1', [userId]);
+  const userResult = await pool.query('SELECT is_active, admin_role FROM users WHERE id = $1', [userId]);
   const isActive = userResult.rows[0]?.is_active ?? true;
+  const adminRole = userResult.rows[0]?.admin_role ?? null;
 
-  res.json({ userId, role, profileCompleted, isActive, ...(employerStatus !== undefined && { employerStatus }) });
+  res.json({
+    userId,
+    role,
+    profileCompleted,
+    isActive,
+    ...(employerStatus !== undefined && { employerStatus }),
+    ...(role === 'admin' && adminRole && { adminRole }),
+  });
 }

@@ -88,3 +88,21 @@ export async function updateStatus(
 
   return toCamelCase(result.rows[0]);
 }
+
+export async function scheduleInterview(
+  applicationId: string,
+  interviewAt: string,
+  notes?: string,
+) {
+  const result = await pool.query(
+    `UPDATE applications
+     SET status = 'interview_scheduled',
+         interview_at = $1,
+         interview_notes = $2
+     WHERE id = $3
+     RETURNING *`,
+    [interviewAt, notes ?? null, applicationId],
+  );
+  if (result.rows.length === 0) return null;
+  return toCamelCase(result.rows[0]);
+}

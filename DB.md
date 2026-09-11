@@ -14,7 +14,7 @@ PostgreSQL 15. UUID primary keys via `uuid-ossp` extension.
 | `document_verification_status` | `pending`, `verified`, `rejected` |
 | `job_type` | `permanent`, `contract`, `internship` |
 | `job_status` | `draft`, `active`, `closed`, `filled`, `expired` |
-| `application_status` | `received`, `viewed`, `shortlisted`, `rejected`, `hired` |
+| `application_status` | `received`, `viewed`, `shortlisted`, `interview_scheduled`, `rejected`, `hired` |
 
 ---
 
@@ -163,11 +163,33 @@ Candidate applies to job. One application per (candidate, job) pair.
 | `rejection_reason` | TEXT | nullable | |
 | `attributed_to_platform` | BOOLEAN | NOT NULL, default `false` | impact tracking |
 | `joining_date` | DATE | nullable | confirmed start date |
+| `interview_at` | TIMESTAMPTZ | nullable | set when employer schedules interview |
+| `interview_notes` | TEXT | nullable | notes visible to candidate |
 | `created_at` | TIMESTAMPTZ | NOT NULL, default `NOW()` | |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, default `NOW()` | auto-updated via trigger |
 
 **Unique:** `(candidate_id, job_id)` — one application per job  
 **Indexes:** `idx_applications_candidate`, `idx_applications_job`
+
+---
+
+### `testimonials`
+Admin-curated success stories displayed on the homepage.
+
+| Column | Type | Constraints | Notes |
+|--------|------|-------------|-------|
+| `id` | UUID | PK, default `uuid_generate_v4()` | |
+| `candidate_id` | UUID | nullable, FK → `candidate_profiles.id` SET NULL | optional link to platform account |
+| `name` | VARCHAR(255) | NOT NULL | display name entered by admin |
+| `photo_url` | VARCHAR(500) | nullable | |
+| `trade` | VARCHAR(100) | nullable | e.g. "Electrician" |
+| `body` | TEXT | NOT NULL | the quote text |
+| `is_published` | BOOLEAN | NOT NULL, default `false` | admin toggles visibility |
+| `display_order` | INTEGER | NOT NULL, default `0` | lower = shown first |
+| `created_at` | TIMESTAMPTZ | NOT NULL, default `NOW()` | |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, default `NOW()` | auto-updated via trigger |
+
+**Indexes:** `idx_testimonials_published` on `(is_published, display_order)`
 
 ---
 
@@ -182,6 +204,7 @@ candidate_profiles ──< applications       (1:N, candidate_id FK)
 jobs ──< applications                     (1:N, job_id FK)
 users ──< employer_profiles.verified_by   (admin who verified)
 users ──< employer_documents.verified_by  (admin who verified doc)
+candidate_profiles ──< testimonials       (0:N, candidate_id FK nullable)
 ```
 
 ---
@@ -194,6 +217,7 @@ users ──< employer_documents.verified_by  (admin who verified doc)
 - `employer_profiles`
 - `jobs`
 - `applications`
+- `testimonials`
 
 ---
 

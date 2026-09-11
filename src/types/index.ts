@@ -1,4 +1,5 @@
 export type Role = 'candidate' | 'employer' | 'admin';
+export type AdminRole = 'super_admin' | 'read_only';
 export type EmployerStatus = 'pending' | 'verified' | 'rejected';
 export type EmployerDocumentType = 'GST_CERTIFICATE' | 'UDYAM_CERTIFICATE' | 'FACTORY_LICENSE' | 'PAN_CARD' | 'OTHER';
 export type DocumentVerificationStatus = 'pending' | 'verified' | 'rejected';
@@ -17,6 +18,7 @@ export interface User {
   email_verified: boolean;
   name: string | null;
   admin_status: 'pending' | 'approved' | 'rejected' | null;
+  admin_role: AdminRole | null;
   refresh_token: string | null;
   refresh_token_expiry: Date | null;
   created_at: Date;
@@ -143,6 +145,7 @@ export interface Paginated<T> {
 export interface JwtPayload {
   userId: string;
   role: Role;
+  adminRole?: AdminRole;
 }
 
 declare global {

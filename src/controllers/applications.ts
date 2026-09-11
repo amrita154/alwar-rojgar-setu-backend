@@ -51,3 +51,21 @@ export async function updateApplicationStatus(req: AuthRequest, res: Response): 
 
   res.json(updated);
 }
+
+export async function scheduleInterview(req: AuthRequest, res: Response): Promise<void> {
+  const { applicationId } = req.params;
+  const { interviewAt, notes } = req.body;
+
+  if (!interviewAt) {
+    res.status(400).json({ message: 'interviewAt is required' });
+    return;
+  }
+
+  const updated = await applicationsService.scheduleInterview(applicationId, interviewAt, notes);
+  if (!updated) {
+    res.status(404).json({ message: 'Application not found' });
+    return;
+  }
+
+  res.json(updated);
+}

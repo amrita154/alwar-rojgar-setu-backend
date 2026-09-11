@@ -21,6 +21,7 @@ import adminRoutes from './routes/admin';
 import statsRoutes from './routes/stats';
 import documentRoutes from './routes/documents';
 import translateRoutes from './routes/translate';
+import testimonialRoutes from './routes/testimonials';
 
 const app = express();
 const PgStore = connectPgSimple(session);
@@ -76,6 +77,7 @@ app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/stats', statsRoutes);
 app.use('/api/v1/documents', documentRoutes);
 app.use('/api/v1/translate', translateRoutes);
+app.use('/api/v1/testimonials', testimonialRoutes);
 
 // Error handling
 app.use(notFound);

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, requireRole } from '../middleware/auth';
+import { authenticate, requireRole, requireSuperAdmin } from '../middleware/auth';
 import {
   getDashboard,
   getAdminEmployers,
@@ -19,17 +19,20 @@ const router = Router();
 
 router.use(authenticate, requireRole('admin'));
 
+// Read-only routes — all admins
 router.get('/dashboard', getDashboard);
 router.get('/employers', getAdminEmployers);
 router.get('/employers/:employerId', getAdminEmployer);
-router.patch('/employers/:employerId/verification', verifyEmployer);
 router.get('/candidates', getAdminCandidates);
 router.get('/candidates/:candidateId', getAdminCandidate);
-router.patch('/users/:userId/disable', disableUser);
-router.patch('/users/:userId/enable', enableUser);
 router.get('/admins', getAdmins);
-router.post('/admins/grant', grantAdminAccess);
 router.get('/admin-invites', getAdminInvites);
-router.delete('/admin-invites/:inviteId', cancelAdminInvite);
+
+// Write routes — super_admin only
+router.patch('/employers/:employerId/verification', requireSuperAdmin, verifyEmployer);
+router.patch('/users/:userId/disable', requireSuperAdmin, disableUser);
+router.patch('/users/:userId/enable', requireSuperAdmin, enableUser);
+router.post('/admins/grant', requireSuperAdmin, grantAdminAccess);
+router.delete('/admin-invites/:inviteId', requireSuperAdmin, cancelAdminInvite);
 
 export default router;

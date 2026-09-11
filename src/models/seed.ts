@@ -18,20 +18,81 @@ async function seed() {
     const employerPasswordHash = await bcrypt.hash('Employer@123', 12);
     const candidatePasswordHash = await bcrypt.hash('Candidate@123', 12);
 
-    // Super Admin — update email if old seed record exists, then upsert with new email
+    // Super Admin 1 — Alwar Rojgar Setu platform admin
     await pool.query(`
       UPDATE users SET email = 'alwarrojarsetu@gmail.com'
       WHERE id = '00000000-0000-0000-0000-000000000001'
         AND email = 'admin@alwar-rojgar.gov.in'
     `);
     await pool.query(`
-      INSERT INTO users (id, email, password_hash, role, is_active, email_verified, name, admin_status)
-      VALUES ('00000000-0000-0000-0000-000000000001', 'alwarrojarsetu@gmail.com', $1, 'admin', true, true, 'Alwar Rojgar Setu Admin', 'approved')
+      INSERT INTO users (id, email, password_hash, role, is_active, email_verified, name, admin_status, admin_role)
+      VALUES ('00000000-0000-0000-0000-000000000001', 'alwarrojarsetu@gmail.com', $1, 'admin', true, true, 'Alwar Rojgar Setu Admin', 'approved', 'super_admin')
       ON CONFLICT (id) DO UPDATE SET
         email          = EXCLUDED.email,
         password_hash  = EXCLUDED.password_hash,
         email_verified = true,
         admin_status   = 'approved',
+        admin_role     = 'super_admin',
+        updated_at     = NOW()
+    `, [adminPasswordHash]);
+
+    // Super Admin 2 — GM DIC, Harish Mittal
+    await pool.query(`
+      INSERT INTO users (id, email, password_hash, role, is_active, email_verified, name, admin_status, admin_role)
+      VALUES ('00000000-0000-0000-0000-000000000004', 'dicalwar@rajasthan.gov.in', $1, 'admin', true, true, 'Harish Mittal', 'approved', 'super_admin')
+      ON CONFLICT (id) DO UPDATE SET
+        password_hash  = EXCLUDED.password_hash,
+        email_verified = true,
+        admin_status   = 'approved',
+        admin_role     = 'super_admin',
+        updated_at     = NOW()
+    `, [adminPasswordHash]);
+
+    // Read-only Admin 1 — OIC, Shree Madhav Bharadwaj
+    await pool.query(`
+      INSERT INTO users (id, email, password_hash, role, is_active, email_verified, name, admin_status, admin_role)
+      VALUES ('00000000-0000-0000-0000-000000000005', 'sdmalw.alw@gmail.com', $1, 'admin', true, true, 'Shree Madhav Bharadwaj', 'approved', 'read_only')
+      ON CONFLICT (id) DO UPDATE SET
+        password_hash  = EXCLUDED.password_hash,
+        email_verified = true,
+        admin_status   = 'approved',
+        admin_role     = 'read_only',
+        updated_at     = NOW()
+    `, [adminPasswordHash]);
+
+    // Read-only Admin 2 — RM RIICO, Paresh Saxena
+    await pool.query(`
+      INSERT INTO users (id, email, password_hash, role, is_active, email_verified, name, admin_status, admin_role)
+      VALUES ('00000000-0000-0000-0000-000000000006', 'alwar@riico.co.in', $1, 'admin', true, true, 'Paresh Saxena', 'approved', 'read_only')
+      ON CONFLICT (id) DO UPDATE SET
+        password_hash  = EXCLUDED.password_hash,
+        email_verified = true,
+        admin_status   = 'approved',
+        admin_role     = 'read_only',
+        updated_at     = NOW()
+    `, [adminPasswordHash]);
+
+    // Read-only Admin 3 — Govt ITI Principal, Manoj Aggrawal
+    await pool.query(`
+      INSERT INTO users (id, email, password_hash, role, is_active, email_verified, name, admin_status, admin_role)
+      VALUES ('00000000-0000-0000-0000-000000000007', 'iti_alwar_govt@yahoo.co.in', $1, 'admin', true, true, 'Manoj Aggrawal', 'approved', 'read_only')
+      ON CONFLICT (id) DO UPDATE SET
+        password_hash  = EXCLUDED.password_hash,
+        email_verified = true,
+        admin_status   = 'approved',
+        admin_role     = 'read_only',
+        updated_at     = NOW()
+    `, [adminPasswordHash]);
+
+    // Read-only Admin 4 — District Employment Office, Harish Nainakwal
+    await pool.query(`
+      INSERT INTO users (id, email, password_hash, role, is_active, email_verified, name, admin_status, admin_role)
+      VALUES ('00000000-0000-0000-0000-000000000008', 'deo.alw.emp@rajasthan.gov.in', $1, 'admin', true, true, 'Harish Nainakwal', 'approved', 'read_only')
+      ON CONFLICT (id) DO UPDATE SET
+        password_hash  = EXCLUDED.password_hash,
+        email_verified = true,
+        admin_status   = 'approved',
+        admin_role     = 'read_only',
         updated_at     = NOW()
     `, [adminPasswordHash]);
 
@@ -88,6 +149,18 @@ async function seed() {
       )
       ON CONFLICT (user_id) DO NOTHING
     `);
+
+    console.log('\n✓ Seed complete\n');
+    console.log('--- Admin credentials (password: Admin@123) ---');
+    console.log('  [super_admin] alwarrojarsetu@gmail.com       — Alwar Rojgar Setu Admin');
+    console.log('  [super_admin] dicalwar@rajasthan.gov.in      — Harish Mittal (GM DIC)');
+    console.log('  [read_only]   sdmalw.alw@gmail.com           — Shree Madhav Bharadwaj (OIC)');
+    console.log('  [read_only]   alwar@riico.co.in              — Paresh Saxena (RM RIICO)');
+    console.log('  [read_only]   iti_alwar_govt@yahoo.co.in     — Manoj Aggrawal (Govt ITI Principal)');
+    console.log('  [read_only]   deo.alw.emp@rajasthan.gov.in   — Harish Nainakwal (District Employment Office)');
+    console.log('--- Demo credentials ---');
+    console.log('  [employer]    demo.employer@example.com      — Employer@123');
+    console.log('  [candidate]   demo.candidate@example.com     — Candidate@123');
 
   } catch (err) {
     console.error('Seed failed:', err);

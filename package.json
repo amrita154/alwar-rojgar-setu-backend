@@ -7,7 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "db:migrate": "tsx src/models/migrate.ts",
+    "db:migrate": "tsx src/models/runner.ts",
+    "db:baseline": "tsx src/models/runner.ts baseline",
     "db:seed": "tsx src/models/seed.ts",
     "lint": "eslint src --ext .ts"
   },

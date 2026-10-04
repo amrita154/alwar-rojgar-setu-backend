@@ -1,6 +1,9 @@
-import { pool } from '../config/database';
+-- Migration: 001_initial_schema
+-- Deployed: initial VPS deployment (commit 4b72e29 baseline)
+-- Covers: all tables and enums as of the first stable production release
+--         (users, email_otps, admin_invites, candidate_profiles, employer_profiles,
+--          employer_documents, jobs, applications, translation_cache)
 
-const migration = `
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -42,14 +45,8 @@ END $$;
 
 -- Application status enum
 DO $$ BEGIN
-  CREATE TYPE application_status AS ENUM ('received', 'viewed', 'shortlisted', 'interview_scheduled', 'rejected', 'hired');
+  CREATE TYPE application_status AS ENUM ('received', 'viewed', 'shortlisted', 'rejected', 'hired');
 EXCEPTION WHEN duplicate_object THEN null;
-END $$;
-
--- Add interview_scheduled to existing databases
-DO $$ BEGIN
-  ALTER TYPE application_status ADD VALUE IF NOT EXISTS 'interview_scheduled' AFTER 'shortlisted';
-EXCEPTION WHEN others THEN null;
 END $$;
 
 -- Admin status enum
@@ -75,16 +72,14 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
--- Add email_verified to existing databases
 DO $$ BEGIN
   ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT false;
 EXCEPTION WHEN duplicate_column THEN null;
 END $$;
 
--- Mark existing Google-authenticated users as verified (Google already verified their email)
 UPDATE users SET email_verified = true WHERE google_id IS NOT NULL AND email_verified = false;
 
--- 2. Email OTPs table (registration + password-reset flows)
+-- 2. Email OTPs table
 CREATE TABLE IF NOT EXISTS email_otps (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email VARCHAR(255) NOT NULL,
@@ -101,27 +96,22 @@ CREATE TABLE IF NOT EXISTS email_otps (
 
 CREATE INDEX IF NOT EXISTS idx_email_otps_email ON email_otps(email);
 
--- Add purpose column to distinguish registration vs password-reset OTPs
 DO $$ BEGIN
   ALTER TABLE email_otps ADD COLUMN purpose VARCHAR(20) NOT NULL DEFAULT 'registration';
 EXCEPTION WHEN duplicate_column THEN null;
 END $$;
 
--- Make role nullable — password-reset OTPs don't need a role
 DO $$ BEGIN
   ALTER TABLE email_otps ALTER COLUMN role DROP NOT NULL;
 EXCEPTION WHEN others THEN null;
 END $$;
 
--- Make password_hash nullable — password-reset OTPs don't pre-store a hash
 DO $$ BEGIN
   ALTER TABLE email_otps ALTER COLUMN password_hash DROP NOT NULL;
 EXCEPTION WHEN others THEN null;
 END $$;
 
--- Admin invites: emails granted admin access before they've signed up yet.
--- Consumed (deleted) the moment that email's account is actually created;
--- an existing account is promoted directly instead of going through here.
+-- Admin invites
 CREATE TABLE IF NOT EXISTS admin_invites (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email VARCHAR(255) NOT NULL UNIQUE,
@@ -131,7 +121,7 @@ CREATE TABLE IF NOT EXISTS admin_invites (
 
 CREATE INDEX IF NOT EXISTS idx_admin_invites_email ON admin_invites(email);
 
--- 3. Candidate Profile table
+-- 3. Candidate profiles
 CREATE TABLE IF NOT EXISTS candidate_profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -162,7 +152,7 @@ CREATE TABLE IF NOT EXISTS candidate_profiles (
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
--- 4. Employer Profile table
+-- 4. Employer profiles
 CREATE TABLE IF NOT EXISTS employer_profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -183,7 +173,6 @@ CREATE TABLE IF NOT EXISTS employer_profiles (
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
--- Add logo_url and description columns if they don't exist (for existing databases)
 DO $$ BEGIN
   ALTER TABLE employer_profiles ADD COLUMN logo_url VARCHAR(500);
 EXCEPTION WHEN duplicate_column THEN null;
@@ -194,7 +183,6 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN null;
 END $$;
 
--- Employer contact person fields (for existing databases)
 DO $$ BEGIN
   ALTER TABLE employer_profiles ADD COLUMN contact_person_name VARCHAR(255);
 EXCEPTION WHEN duplicate_column THEN null;
@@ -212,7 +200,6 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN null;
 END $$;
 
--- Candidate phone + description (for existing databases)
 DO $$ BEGIN
   ALTER TABLE candidate_profiles ADD COLUMN phone VARCHAR(20);
 EXCEPTION WHEN duplicate_column THEN null;
@@ -221,24 +208,8 @@ DO $$ BEGIN
   ALTER TABLE candidate_profiles ADD COLUMN description TEXT;
 EXCEPTION WHEN duplicate_column THEN null;
 END $$;
-DO $$ BEGIN
-  ALTER TABLE candidate_profiles ADD COLUMN gender VARCHAR(20);
-EXCEPTION WHEN duplicate_column THEN null;
-END $$;
 
--- Admin role (super_admin | read_only) — NULL for non-admins
-DO $$ BEGIN
-  ALTER TABLE users ADD COLUMN admin_role VARCHAR(20);
-EXCEPTION WHEN duplicate_column THEN null;
-END $$;
-
--- Admin invites carry the role that will be assigned on sign-up
-DO $$ BEGIN
-  ALTER TABLE admin_invites ADD COLUMN admin_role VARCHAR(20) NOT NULL DEFAULT 'read_only';
-EXCEPTION WHEN duplicate_column THEN null;
-END $$;
-
--- 5. Employer Documents table
+-- 5. Employer documents
 CREATE TABLE IF NOT EXISTS employer_documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   employer_id UUID NOT NULL REFERENCES employer_profiles(id) ON DELETE CASCADE,
@@ -252,7 +223,7 @@ CREATE TABLE IF NOT EXISTS employer_documents (
 
 CREATE INDEX IF NOT EXISTS idx_employer_docs ON employer_documents(employer_id);
 
--- 6. Jobs table
+-- 6. Jobs
 CREATE TABLE IF NOT EXISTS jobs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   employer_id UUID NOT NULL REFERENCES employer_profiles(id) ON DELETE CASCADE,
@@ -275,7 +246,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_employer ON jobs(employer_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_district ON jobs(district);
 
--- 7. Applications table
+-- 7. Applications
 CREATE TABLE IF NOT EXISTS applications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   candidate_id UUID NOT NULL REFERENCES candidate_profiles(id) ON DELETE CASCADE,
@@ -290,47 +261,13 @@ CREATE TABLE IF NOT EXISTS applications (
   joining_date DATE,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  interview_at TIMESTAMP WITH TIME ZONE,
-  interview_notes TEXT,
   UNIQUE(candidate_id, job_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_applications_candidate ON applications(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_applications_job ON applications(job_id);
 
--- Interview fields (for existing databases)
-DO $$ BEGIN
-  ALTER TABLE applications ADD COLUMN interview_at TIMESTAMP WITH TIME ZONE;
-EXCEPTION WHEN duplicate_column THEN null;
-END $$;
-DO $$ BEGIN
-  ALTER TABLE applications ADD COLUMN interview_notes TEXT;
-EXCEPTION WHEN duplicate_column THEN null;
-END $$;
-
--- 8. Testimonials (curated by admin, shown on homepage)
-CREATE TABLE IF NOT EXISTS testimonials (
-  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  candidate_id   UUID REFERENCES candidate_profiles(id) ON DELETE SET NULL,
-  name           VARCHAR(255) NOT NULL,
-  photo_url      VARCHAR(500),
-  trade          VARCHAR(100),
-  body           TEXT NOT NULL,
-  is_published   BOOLEAN NOT NULL DEFAULT false,
-  display_order  INTEGER NOT NULL DEFAULT 0,
-  created_at     TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  updated_at     TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_testimonials_published ON testimonials(is_published, display_order);
-
-DO $$ BEGIN
-  CREATE TRIGGER update_testimonials_updated_at BEFORE UPDATE ON testimonials
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-EXCEPTION WHEN duplicate_object THEN null;
-END $$;
-
--- 9. Translation cache
+-- 8. Translation cache
 CREATE TABLE IF NOT EXISTS translation_cache (
   source_hash CHAR(64) NOT NULL,
   target_lang VARCHAR(10) NOT NULL,
@@ -339,7 +276,7 @@ CREATE TABLE IF NOT EXISTS translation_cache (
   PRIMARY KEY (source_hash, target_lang)
 );
 
--- Updated_at trigger function
+-- updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -348,7 +285,6 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Apply updated_at triggers
 DO $$ BEGIN
   CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -378,17 +314,3 @@ DO $$ BEGIN
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 EXCEPTION WHEN duplicate_object THEN null;
 END $$;
-`;
-
-async function migrate() {
-  try {
-    await pool.query(migration);
-  } catch (err) {
-    console.error('Migration failed:', err);
-    process.exit(1);
-  } finally {
-    await pool.end();
-  }
-}
-
-migrate();

@@ -74,3 +74,28 @@ export async function remove(id: string): Promise<boolean> {
   const result = await pool.query(`DELETE FROM testimonials WHERE id = $1`, [id]);
   return (result.rowCount ?? 0) > 0;
 }
+
+export async function getByCandidate(candidateId: string) {
+  const result = await pool.query(
+    `SELECT * FROM testimonials WHERE candidate_id = $1 ORDER BY created_at DESC`,
+    [candidateId],
+  );
+  return result.rows.map(toCamelCase);
+}
+
+export async function adminUpdate(id: string, input: { isPublished?: boolean; displayOrder?: number }) {
+  const fields: string[] = [];
+  const params: unknown[] = [];
+
+  if (input.isPublished !== undefined) { params.push(input.isPublished); fields.push(`is_published = $${params.length}`); }
+  if (input.displayOrder !== undefined) { params.push(input.displayOrder); fields.push(`display_order = $${params.length}`); }
+
+  if (fields.length === 0) return getById(id);
+
+  params.push(id);
+  const result = await pool.query(
+    `UPDATE testimonials SET ${fields.join(', ')} WHERE id = $${params.length} RETURNING *`,
+    params,
+  );
+  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+}

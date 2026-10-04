@@ -10,8 +10,9 @@ interface TopEmployer {
 }
 
 export async function getPublicStats(_req: Request, res: Response): Promise<void> {
-  const [activeJobs, registeredEmployers, successfulConnects, topEmployersData] = await Promise.all([
+  const [activeJobs, totalJobs, registeredEmployers, successfulConnects, topEmployersData] = await Promise.all([
     pool.query("SELECT COUNT(*) FROM jobs WHERE status = 'active'"),
+    pool.query("SELECT COUNT(*) FROM jobs WHERE status <> 'draft'"),
     pool.query("SELECT COUNT(*) FROM employer_profiles WHERE status = 'verified'"),
     pool.query("SELECT COUNT(DISTINCT candidate_id) FROM applications"),
     pool.query(`
@@ -41,6 +42,7 @@ export async function getPublicStats(_req: Request, res: Response): Promise<void
 
   res.json({
     activeJobs: parseInt(activeJobs.rows[0].count, 10),
+    totalJobs: parseInt(totalJobs.rows[0].count, 10),
     registeredEmployers: parseInt(registeredEmployers.rows[0].count, 10),
     successfulConnects: parseInt(successfulConnects.rows[0].count, 10),
     topEmployers,

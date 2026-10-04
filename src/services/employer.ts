@@ -15,15 +15,18 @@ export async function createProfile(userId: string, data: Record<string, unknown
   const {
     companyName, gstNumber, udyamNumber, logoUrl, description,
     contactPersonName, contactPersonPhone, contactPersonEmail, contactPersonDesignation,
+    altContactPersonName, altContactPersonPhone,
   } = data;
 
   const result = await pool.query(
     `INSERT INTO employer_profiles
       (user_id, company_name, gst_number, udyam_number, logo_url, description,
-       contact_person_name, contact_person_phone, contact_person_email, contact_person_designation)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+       contact_person_name, contact_person_phone, contact_person_email, contact_person_designation,
+       alt_contact_person_name, alt_contact_person_phone)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
     [userId, companyName, gstNumber || null, udyamNumber || null, logoUrl || null, description || null,
-     contactPersonName || null, contactPersonPhone || null, contactPersonEmail || null, contactPersonDesignation || null]
+     contactPersonName || null, contactPersonPhone || null, contactPersonEmail || null, contactPersonDesignation || null,
+     altContactPersonName || null, altContactPersonPhone || null]
   );
 
   return toCamelCase(result.rows[0]);
@@ -38,7 +41,10 @@ export async function updateProfile(userId: string, data: Record<string, unknown
     description: 'description',
     contactPersonName: 'contact_person_name',
     contactPersonPhone: 'contact_person_phone',
+    contactPersonEmail: 'contact_person_email',
     contactPersonDesignation: 'contact_person_designation',
+    altContactPersonName: 'alt_contact_person_name',
+    altContactPersonPhone: 'alt_contact_person_phone',
   };
 
   const fields: string[] = [];

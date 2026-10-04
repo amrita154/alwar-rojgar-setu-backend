@@ -38,6 +38,22 @@ export interface EmailOtp {
   created_at: Date;
 }
 
+export interface WorkExperience {
+  company: string;
+  role: string;
+  fromMonth: string | null;
+  toMonth: string | null;
+  current: boolean;
+  description: string | null;
+}
+
+export interface Education {
+  degree: string;
+  institution: string;
+  field: string | null;
+  year: number | null;
+}
+
 export interface CandidateProfile {
   id: string;
   user_id: string;
@@ -51,6 +67,8 @@ export interface CandidateProfile {
   work_experience_months: number | null;
   expected_salary: number | null;
   skills: string[] | null;
+  work_experiences: WorkExperience[];
+  educations: Education[];
   city: string | null;
   district: string | null;
   pincode: string | null;
@@ -80,6 +98,8 @@ export interface EmployerProfileRow {
   contact_person_phone: string | null;
   contact_person_email: string | null;
   contact_person_designation: string | null;
+  alt_contact_person_name: string | null;
+  alt_contact_person_phone: string | null;
   status: EmployerStatus;
   verified_by: string | null;
   verified_at: Date | null;

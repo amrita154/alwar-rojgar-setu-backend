@@ -14,10 +14,14 @@ const ALLOWED_UPDATE_FIELDS: Record<string, string> = {
   workExperienceMonths: 'work_experience_months',
   expectedSalary: 'expected_salary',
   skills: 'skills',
+  workExperiences: 'work_experiences',
+  educations: 'educations',
   city: 'city',
   district: 'district',
   pincode: 'pincode',
 };
+
+const JSONB_FIELDS = new Set(['workExperiences', 'educations']);
 
 export async function getProfileByUserId(userId: string) {
   const result = await pool.query('SELECT * FROM candidate_profiles WHERE user_id = $1', [userId]);
@@ -32,20 +36,22 @@ export async function getProfileId(userId: string): Promise<string | null> {
 export async function createProfile(userId: string, data: Record<string, unknown>) {
   const {
     fullName, email, phone, description, gender, highestEducation, itiTrade, itiCollege, department,
-    graduationYear, workExperienceMonths, expectedSalary, skills,
+    graduationYear, workExperienceMonths, expectedSalary, skills, workExperiences, educations,
     city, district, pincode,
   } = data;
 
   const result = await pool.query(
     `INSERT INTO candidate_profiles
       (user_id, full_name, email, phone, description, gender, highest_education, iti_trade, iti_college,
-       department, graduation_year, work_experience_months, expected_salary, skills, city, district, pincode)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       department, graduation_year, work_experience_months, expected_salary, skills,
+       work_experiences, educations, city, district, pincode)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
     RETURNING *`,
     [userId, fullName, email || null, phone || null, description || null, gender || null,
      highestEducation || null, itiTrade || null, itiCollege || null, department || null,
      graduationYear || null, workExperienceMonths || null, expectedSalary || null,
-     skills || null, city || null, district || null, pincode || null]
+     skills || null, JSON.stringify(workExperiences || []), JSON.stringify(educations || []),
+     city || null, district || null, pincode || null]
   );
 
   return toCamelCase(result.rows[0]);
@@ -59,7 +65,7 @@ export async function updateProfile(userId: string, data: Record<string, unknown
   for (const [camelKey, dbKey] of Object.entries(ALLOWED_UPDATE_FIELDS)) {
     if (data[camelKey] !== undefined) {
       fields.push(`${dbKey} = $${idx}`);
-      values.push(data[camelKey]);
+      values.push(JSONB_FIELDS.has(camelKey) ? JSON.stringify(data[camelKey]) : data[camelKey]);
       idx++;
     }
   }
